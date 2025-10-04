@@ -353,7 +353,7 @@ int sif_open(FILE *fp, SifFile *sif_file) {
     printf("→ Handling version-specific skipping (exact Python logic)...\n");
 
     char skip_buffer[256];
-    
+
     // 根據 SIF 版本跳過相應行數
     if (info->sif_version >= 65548 && info->sif_version <= 65557) {
         for (int i = 0; i < 2; i++) {
@@ -442,6 +442,103 @@ int sif_open(FILE *fp, SifFile *sif_file) {
         fgets(skip_buffer, sizeof(skip_buffer), fp);
         printf("  Skipped line for calb version 65540\n");
     }
+
+    long debug_pos = ftell(fp);
+
+    printf("  Current position before calibration: 0x%lX\n", debug_pos);
+
+    // 顯示接下來的數據
+    unsigned char debug_bytes[128];
+    fread(debug_bytes, 1, 128, fp);
+    printf("  Next 128 bytes at 0x%lX:\n", debug_pos);
+    for (int i = 0; i < 128; i++) {
+        if (i % 16 == 0) printf("    %04X: ", i);
+        printf("%02X ", debug_bytes[i]);
+        if (i % 16 == 15) printf("\n");
+    }
+    printf("\n  As text: ");
+    for (int i = 0; i < 128; i++) {
+        unsigned char c = debug_bytes[i];
+        if (isprint(c)) {
+            printf("%c", c);
+        } else if (c == '\n') {
+            printf("\\n");
+        } else if (c == '\r') {
+            printf("\\r");
+        } else {
+            printf(".");
+        }
+    }
+    printf("\n");
+
+    // 回到原來位置
+    fseek(fp, debug_pos, SEEK_SET);
+
+    printf("→ Exact parsing based on hex dump...\n");
+
+    // 讀取校準數據
+    if (fgets(skip_buffer, sizeof(skip_buffer), fp)) {
+        skip_buffer[strcspn(skip_buffer, "\r\n")] = 0;
+        printf("  Calibration_data: '%s'\n", skip_buffer);
+    }
+
+    // 讀取舊的校準數據  
+    if (fgets(skip_buffer, sizeof(skip_buffer), fp)) {
+        skip_buffer[strcspn(skip_buffer, "\r\n")] = 0;
+        printf("  Calibration_data_old: '%s'\n", skip_buffer);
+    }
+
+    // 跳過空行
+    if (fgets(skip_buffer, sizeof(skip_buffer), fp)) {
+        skip_buffer[strcspn(skip_buffer, "\r\n")] = 0;
+        printf("  Empty line: '%s'\n", skip_buffer);
+    }
+
+    // 現在讀取拉曼波長 - 但根據數據，下一行是 "65539 0 0 0..."，這不是波長！
+    // 讓我們繼續跳過直到找到合理的波長值
+    printf("  Searching for Raman wavelength...\n");
+
+    char search_buffer[256];
+    int found_raman = 0;
+
+    // 搜索接下來的幾行
+    for (int i = 0; i < 10; i++) {
+        if (fgets(search_buffer, sizeof(search_buffer), fp)) {
+            search_buffer[strcspn(search_buffer, "\r\n")] = 0;
+            printf("  Line %d: '%s'\n", i + 1, search_buffer);
+            
+            // 檢查是否可能是波長（單個數字，在合理範圍內）
+            char *endptr;
+            double potential_wavelength = strtod(search_buffer, &endptr);
+            
+            // 如果是單個數字且在合理的光學波長範圍內
+            if (endptr != search_buffer && *endptr == '\0' && 
+                potential_wavelength > 200 && potential_wavelength < 1000) {
+                info->raman_ex_wavelength = potential_wavelength;
+                printf("✓ Found Raman excitation wavelength: %.2f nm\n", info->raman_ex_wavelength);
+                found_raman = 1;
+                break;
+            }
+            
+            // 或者檢查是否包含波長關鍵詞
+            if (strstr(search_buffer, "532") != NULL || 
+                strstr(search_buffer, "785") != NULL ||
+                strstr(search_buffer, "1064") != NULL) {
+                printf("  Found wavelength keyword in: %s\n", search_buffer);
+                // 可以嘗試從中提取數字
+            }
+        } else {
+            break;
+        }
+    }
+
+    if (!found_raman) {
+        info->raman_ex_wavelength = NAN;
+        printf("  Raman excitation wavelength: not found in file\n");
+    }
+
+    // 繼續解析後面的內容...
+    printf("→ Continuing with remaining parsing...\n");
 
     // 讀取校準數據
     printf("→ Reading calibration data...\n");
