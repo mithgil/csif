@@ -113,6 +113,9 @@ void print_sif_info_summary(const SifInfo *info) {
     printf("Exposure Time: %.6f s\n", info->exposure_time);
     printf("Cycle Time: %.6f s\n", info->cycle_time);
     printf("Detector Temperature: %.2f °C\n", info->detector_temperature);
+    if (info->detector_temperature <= -998.0f) {
+        printf(" [SENSOR OFFLINE]");
+    }
     printf("Data Offset: 0x%08lX\n", info->data_offset);
     
     if (info->calibration_data_count > 0) {

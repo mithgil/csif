@@ -4,6 +4,7 @@
 #include "sif_utils.h"
 
 //  ./bin/read_sif /home/tim/Documents/AS/data/andor/20250917/1OD_500uW_sapphire_200umFiber_.sif
+//  ./bin/debug_sif /home/tim/Documents/AS/data/andor/20250917/1OD_500uW_sapphire_200umFiber_.sif
 
 int main(int argc, char *argv[]) {
     if (argc < 2) {
@@ -19,13 +20,8 @@ int main(int argc, char *argv[]) {
     printf("1. First Line Analysis:\n");
     print_sif_first_line(filename);
     printf("\n");
-    
-    // 2. 打印前7行
-    printf("2. First 7 Lines Analysis:\n");
-    print_sif_first_lines(filename, 7);
-    printf("\n");
-    
-    // 3. 完整解析並顯示資訊
+       
+    // 2. 完整解析並顯示資訊
     printf("3. Complete File Analysis:\n");
     FILE *fp = fopen(filename, "rb");
     if (fp) {
@@ -36,8 +32,8 @@ int main(int argc, char *argv[]) {
             print_sif_file_structure(&sif_file);
             printf("\n");
             
-            // 4. 顯示數據區域的十六進制轉儲
-            printf("4. Data Region Hex Dump (first 256 bytes):\n");
+            // 3. 顯示數據區域的十六進制轉儲
+            printf("3. Data Region Hex Dump (first 256 bytes):\n");
             print_hex_dump(fp, sif_file.info.data_offset, 256);
             
             sif_close(&sif_file);

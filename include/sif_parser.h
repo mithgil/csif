@@ -94,6 +94,6 @@ int read_until(FILE *fp, char *buffer, int max_length, char terminator);
 int read_int(FILE *fp);
 double read_float(FILE *fp);
 void skip_spaces(FILE *fp);
-int extract_user_text(SifInfo *info);
+void extract_user_text(SifInfo *info);
 
 #endif

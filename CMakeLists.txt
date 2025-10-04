@@ -20,9 +20,16 @@ target_include_directories(sif_parser_obj PUBLIC
     $<INSTALL_INTERFACE:include>
 )
 
-# 可執行文件
+# 可執行文件 - 使用對象庫
 add_executable(read_sif src/main.c)
-target_link_libraries(read_sif PRIVATE sif_parser_obj)
+target_link_libraries(read_sif PRIVATE sif_parser_obj m)  # 這裡也要加 m
+
+# 或者更好的方式：也使用對象庫
+add_executable(debug_sif src/debug_sif.c)
+target_link_libraries(debug_sif PRIVATE sif_parser_obj m)
+
+add_executable(debug_detail_sif src/debug_detail.c)
+target_link_libraries(debug_detail_sif PRIVATE sif_parser_obj m)
 
 # 共享庫
 add_library(sif_parser_shared SHARED $<TARGET_OBJECTS:sif_parser_obj>)

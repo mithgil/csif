@@ -1,2 +1,5 @@
 build/
 julia/
+python/
+tests/
+test_data/
