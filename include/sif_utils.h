@@ -6,6 +6,8 @@
 
 // 工具函數宣告
 void trim_trailing_whitespace(char *str);
+void debug_print_some_lines(FILE* fp, long debug_pos, int num_lines);
+
 int32_t read_little_endian_int32(FILE *fp);
 int32_t read_big_endian_int32(FILE *fp);
 void print_sif_first_line(const char *filename);

@@ -4,6 +4,7 @@
 #include <inttypes.h>
 
 // 首先聲明所有 static 輔助函數
+static void extract_text_part_robust(const char *input, char *output, int max_length);
 static int read_binary_string(FILE *fp, char *buffer, int max_length, int length);
 static int read_line_with_binary_check(FILE *fp, char *buffer, int max_length);
 static int read_line_directly(FILE *fp, char *buffer, int max_length);
@@ -11,6 +12,52 @@ static int read_line_directly(FILE *fp, char *buffer, int max_length);
 static void discard_line(FILE *fp);
 static void discard_bytes(FILE *fp, long count);
 
+
+// 更健壯的文本提取函數
+static void extract_text_part_robust(const char *input, char *output, int max_length) {
+    if (!input || !output) return;
+    
+    int i = 0;
+    int out_index = 0;
+    int found_text = 0;
+    
+    // 跳過前導空格
+    while (input[i] != '\0' && isspace((unsigned char)input[i])) {
+        i++;
+    }
+    
+    // 複製字母字符直到遇到數字
+    while (input[i] != '\0' && out_index < max_length - 1) {
+        unsigned char c = input[i];
+        
+        if (isalpha(c) || c == ' ') {
+            output[out_index++] = c;
+            found_text = 1;
+        } else if (isdigit(c)) {
+            // 遇到數字，如果已經找到文本就停止
+            if (found_text) break;
+            // 如果還沒找到文本，繼續（跳過前導數字）
+        } else {
+            // 其他字符（標點等），如果已經找到文本就停止
+            if (found_text) break;
+        }
+        i++;
+    }
+    
+    output[out_index] = '\0';
+    trim_trailing_whitespace(output);
+    
+    // 如果提取失敗，使用默認值
+    if (strlen(output) == 0) {
+        if (strstr(input, "Wavelength") != NULL) {
+            strcpy(output, "Wavelength");
+        } else if (strstr(input, "Counts") != NULL) {
+            strcpy(output, "Counts");
+        } else if (strstr(input, "Pixel") != NULL) {
+            strcpy(output, "Pixel number");
+        }
+    }
+}
 
 // 直接讀取一行（用於當長度前綴解析失敗時）
 static int read_line_directly(FILE *fp, char *buffer, int max_length) {
@@ -185,7 +232,7 @@ double read_float(FILE *fp) {
     return atof(buffer);
 }
 
-// 跳過空格和換行符 (模擬 Python 的 _skip_spaces)
+// 跳過空格和換行符 
 void skip_spaces(FILE *fp) {
     char c;
     long offset;
@@ -480,61 +527,103 @@ int sif_open(FILE *fp, SifFile *sif_file) {
         printf("  Raman wavelength: N/A ('%s')\n", raman_line);
     }
 
-    // 現在跳過3行
-    printf("→ Skipping 3 lines after Raman wavelength...\n");
-    for (int i = 0; i < 3; i++) {
+    printf("→ Skipping 4 lines after Raman wavelength...\n");
+    for (int i = 0; i < 4; i++) {
         discard_line(fp);
     }
-    printf("  Skipped 3 lines\n");
 
-    printf("  After calibration section, position: 0x%lX\n", ftell(fp));
+    long after_calib_pos = ftell(fp);
+    printf("  Skipped 4 lines position: 0x%lX\n", after_calib_pos);
 
-    printf("→ Debug: Checking actual data format at 0x%lX\n", ftell(fp));
-
-    // 讀取接下來的幾行看看真實內容
-    for (int i = 0; i < 6; i++) {  // 多讀幾行
-        char debug_line[256];
-        if (fgets(debug_line, sizeof(debug_line), fp) == NULL) break;
-        trim_trailing_whitespace(debug_line);
-        printf("  Line %d: '%s' (length: %lu)\n", i, debug_line, strlen(debug_line));
-    }
-
-    // 回到原來位置
-    fseek(fp, 0xAC6, SEEK_SET);
-    printf("  Reset to position: 0x%lX\n", ftell(fp));
+    //debug_print_some_lines(fp, after_calib_pos, 6);
 
     // Frame Axis, Data Type, Image Axis
-
     printf("→ Reading axes as simple text lines...\n");
 
-    // 直接讀取三行
+    // 讀取原始行
     if (fgets(info->frame_axis, sizeof(info->frame_axis), fp) == NULL) return -1;
     trim_trailing_whitespace(info->frame_axis);
+    printf("  Raw Frame Axis: '%s'\n", info->frame_axis);
 
-    if (fgets(info->data_type, sizeof(info->data_type), fp) == NULL) return -1;  
+    if (fgets(info->data_type, sizeof(info->data_type), fp) == NULL) return -1;
     trim_trailing_whitespace(info->data_type);
+    printf("  Raw Data Type: '%s'\n", info->data_type);
 
     if (fgets(info->image_axis, sizeof(info->image_axis), fp) == NULL) return -1;
     trim_trailing_whitespace(info->image_axis);
+    printf("  Raw Image Axis: '%s'\n", info->image_axis);
+
+    // 提取純文本部分 
+    extract_text_part_robust(info->frame_axis, info->frame_axis, sizeof(info->frame_axis)); 
+    extract_text_part_robust(info->data_type, info->data_type, sizeof(info->data_type));  
+
+    // 保存純文字部分到臨時變數
+    char image_axis_text[MAX_STRING_LENGTH];
+    extract_text_part_robust(info->image_axis, image_axis_text, sizeof(image_axis_text));
+    printf("  Text part: '%s'\n", image_axis_text);
+
+    // 但保留原始字符串用於解析數字
+    char *number_part = info->image_axis + strlen("Pixel number");
+    printf("  Number part: '%s'\n", number_part);
 
     printf("✓ Frame Axis: '%s'\n", info->frame_axis);
-    printf("✓ Data Type: '%s'\n", info->data_type); 
+    printf("✓ Data Type: '%s'\n", info->data_type);
+
+    // 解析數字
+    char *token = strtok(number_part, " ");
+    int values[9];
+    int value_count = 0;
+
+    while (token && value_count < 9) {
+        values[value_count] = atoi(token);
+        value_count++;
+        token = strtok(NULL, " ");
+    }
+
+    int layout_marker = 0;
+    int x0 = 0, y1 = 0, x1 = 0, y0 = 0;
+
+    if (value_count >= 9) {
+        layout_marker = values[0];
+        x0 = values[1];
+        y1 = values[2]; 
+        x1 = values[3];
+        y0 = values[4];
+
+        // 設置數值到結構體
+        info->number_of_frames = values[5];
+        info->number_of_subimages = values[6];
+        info->total_length = values[7];
+        info->image_length = values[8];
+        
+
+    }
+
+    // 現在可以安全地提取文本部分（因為數值已經解析完了）
+    char temp[MAX_STRING_LENGTH];
+    extract_text_part_robust(info->image_axis, temp, sizeof(temp));
+    strcpy(info->image_axis, temp);
     printf("✓ Image Axis: '%s'\n", info->image_axis);
 
-    printf("  After axes reading, position: 0x%lX\n", ftell(fp));
-    
+    printf("✓ Image info:\n");
+    printf("  %-15s %d\n", "Frames:", info->number_of_frames);
+    printf("  %-15s %d\n", "Subimages:", info->number_of_subimages);
+    printf("  %-15s %d\n", "Total length:", info->total_length);
+    printf("  %-15s %d\n", "Image length:", info->image_length);
 
-    // 設置一些基本的默認值以避免段錯誤
-    info->number_of_frames = 1;
-    info->number_of_subimages = 1;
-    info->image_width = info->detector_width;
-    info->image_height = info->detector_height;
+    // 計算並顯示圖像尺寸
+    int width = (1 + x1 - x0) / info->xbin;
+    int height = (1 + y1 - y0) / info->ybin;
+    printf("  %-20s %dx%d\n", "Image size:", width, height);
+    printf("  %-20s %dx%d\n", "Binning:", info->xbin, info->ybin);
+
+
+    printf("  After Image Axis line parsing, position: 0x%lX\n", ftell(fp));
+   
+    
     info->data_offset = ftell(fp);  // 臨時設置為當前位置
 
-    printf("→ Basic parsing completed, setting default values\n");
-
-    return 0;
-
+    printf("→ Parsing until Image Axis and image info is complete\n");
     
     // 清理和提取 user_text 中的校準數據
     extract_user_text(info);

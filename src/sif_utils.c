@@ -6,6 +6,13 @@
 #include <string.h>
 #include <errno.h>
 
+static int read_binary_string(FILE *fp, char *buffer, int max_length, int length);
+static int read_line_with_binary_check(FILE *fp, char *buffer, int max_length);
+static int read_line_directly(FILE *fp, char *buffer, int max_length);
+static int safe_read_length_prefixed_string(FILE *fp, char *buffer, int max_length, const char *field_name);
+static void discard_line(FILE *fp);
+static void discard_bytes(FILE *fp, long count);
+
 void trim_trailing_whitespace(char *str) {
     if (!str) return;
     
@@ -14,6 +21,22 @@ void trim_trailing_whitespace(char *str) {
         str[len - 1] = '\0';
         len--;
     }
+}
+
+void debug_print_some_lines(FILE* fp, long debug_pos, int num_lines){
+
+    printf("→ Debug: Checking actual data format at 0x%lX\n", debug_pos);
+
+    for (int i = 0; i < num_lines; i++) {  // 多讀幾行
+        char debug_line[256];
+        if (fgets(debug_line, sizeof(debug_line), fp) == NULL) break;
+        trim_trailing_whitespace(debug_line);
+        printf("  Line %d: '%s' (length: %lu)\n", i, debug_line, strlen(debug_line));
+    }
+
+    // 回到原來位置
+    fseek(fp, debug_pos, SEEK_SET);
+    printf("  Reset to position: 0x%lX\n", ftell(fp));
 }
 
 // 輔助函數：從文件流中讀取一個 4-byte (32-bit) 小端序整數
