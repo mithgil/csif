@@ -62,7 +62,7 @@ typedef struct {
     double gate_delay;
     double raman_ex_wavelength;
     
-    double calibration_data[MAX_CALIBRATION_COEFFS];
+    double *calibration_data; 
     int calibration_data_count;
     double *frame_calibrations;
     int has_frame_calibrations;
@@ -85,16 +85,16 @@ typedef struct {
 
 typedef struct {
     ImageTile *tiles;
-    int tile_count;
     int frame_count;
+    int tile_count;
     SifInfo info;
     
-    void *raw_data;                    
-    size_t raw_data_size;              
-    int pixels_loaded;                 
+    // 数据存储
+    float *frame_data;            // 一維數組：frame_data[frame * height * width + row * width + col]
+    int data_loaded;              // 标记数据是否已加载
     
-    float *image_data;                 
-    double *wavelengths;               
+    FILE *file_ptr;               // 文件指针（用于延迟加载）
+    const char *filename;         // 文件名（用于重新打开文件）
     
 } SifFile;
 
@@ -102,6 +102,18 @@ typedef struct {
 int sif_open(FILE *fp, SifFile *sif_file);
 void sif_close(SifFile *sif_file);
 int extract_calibration(const SifInfo *info, double **calibration, int *calib_width, int *calib_frames);
+
+// 数据读取函数
+int sif_load_all_frames(SifFile *sif_file);
+int sif_load_single_frame(SifFile *sif_file, int frame_index);
+int sif_load_frame_range(SifFile *sif_file, int start_frame, int end_frame);
+void sif_unload_data(SifFile *sif_file);
+
+// 数据访问函数
+float *sif_get_frame_data(SifFile *sif_file, int frame_index);
+int sif_save_frame_as_text(SifFile *sif_file, int frame_index, const char *filename);
+float sif_get_pixel_value(SifFile *sif_file, int frame_index, int row, int col);
+int sif_copy_frame_data(SifFile *sif_file, int frame_index, float *output_buffer);
 
 // 輔助函數
 int read_until(FILE *fp, char *buffer, int max_length, char terminator);
