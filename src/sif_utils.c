@@ -2,6 +2,62 @@
 #include <ctype.h>
 #include <inttypes.h>  // 添加這個頭文件
 
+#include <stdint.h>
+#include <string.h>
+#include <errno.h>
+
+void trim_trailing_whitespace(char *str) {
+    if (!str) return;
+    
+    size_t len = strlen(str);
+    while (len > 0 && isspace((unsigned char)str[len - 1])) {
+        str[len - 1] = '\0';
+        len--;
+    }
+}
+
+// 輔助函數：從文件流中讀取一個 4-byte (32-bit) 小端序整數
+// 返回值：成功讀取的整數值；失敗則返回 -1
+int32_t read_little_endian_int32(FILE *fp) {
+    uint8_t bytes[4];
+    size_t count = fread(bytes, 1, 4, fp);
+
+    if (count != 4) {
+        // 如果讀取不足 4 個字節，則返回錯誤
+        return -1; 
+    }
+
+    // 構建 32 位整數 (小端序: byte[0] 是最低位)
+    int32_t value = (int32_t)(
+        (bytes[0] << 0) |
+        (bytes[1] << 8) |
+        (bytes[2] << 16) |
+        (bytes[3] << 24)
+    );
+
+    return value;
+}
+
+// 讀取大端序 32 位整數
+int32_t read_big_endian_int32(FILE *fp) {
+    uint8_t bytes[4];
+    size_t count = fread(bytes, 1, 4, fp);
+    
+    if (count != 4) {
+        return -1;
+    }
+    
+    // 大端序: byte[0] 是最高位
+    int32_t value = (int32_t)(
+        (bytes[0] << 24) |
+        (bytes[1] << 16) | 
+        (bytes[2] << 8) |
+        (bytes[3] << 0)
+    );
+    
+    return value;
+}
+
 // 打印 SIF 文件的第一行
 void print_sif_first_line(const char *filename) {
     FILE *fp = fopen(filename, "rb");
@@ -150,7 +206,7 @@ void print_sif_file_structure(const SifFile *sif_file) {
     printf("SIF File Structure:\n");
     printf("===================\n");
     printf("Total Frames: %d\n", sif_file->frame_count);
-    printf("Image Dimensions: %d x %d\n", sif_file->image_width, sif_file->image_height);
+    printf("Image Dimensions: %d x %d\n", sif_file->info.image_width, sif_file->info.image_height);
     printf("Tile Count: %d\n", sif_file->tile_count);
     
     if (sif_file->tiles && sif_file->tile_count > 0) {

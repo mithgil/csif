@@ -5,6 +5,9 @@
 #include "sif_parser.h"
 
 // 工具函數宣告
+void trim_trailing_whitespace(char *str);
+int32_t read_little_endian_int32(FILE *fp);
+int32_t read_big_endian_int32(FILE *fp);
 void print_sif_first_line(const char *filename);
 void print_sif_first_lines(const char *filename, int line_count);
 void print_sif_info_summary(const SifInfo *info);

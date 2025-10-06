@@ -3,6 +3,8 @@
 #include <string.h>
 #include <ctype.h>
 
+/* Hex dump */
+
 void analyze_sif_structure(const char *filename) {
     FILE *fp = fopen(filename, "rb");
     if (!fp) {
@@ -64,6 +66,8 @@ void analyze_sif_structure(const char *filename) {
     
     fclose(fp);
 }
+
+// ./bin/debug_detail_sif '/home/tim/Documents/AS/data/andor/20250908/monochrom_430_700_10_LED_2.sif'
 
 int main(int argc, char *argv[]) {
     if (argc < 2) {

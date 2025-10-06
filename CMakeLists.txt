@@ -14,6 +14,10 @@ add_library(sif_parser_obj OBJECT
     src/sif_utils.c
 )
 
+set_target_properties(sif_parser_obj PROPERTIES
+    POSITION_INDEPENDENT_CODE TRUE
+)
+
 # 設置包含目錄
 target_include_directories(sif_parser_obj PUBLIC 
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
@@ -33,7 +37,7 @@ target_link_libraries(debug_detail_sif PRIVATE sif_parser_obj m)
 
 # 共享庫
 add_library(sif_parser_shared SHARED $<TARGET_OBJECTS:sif_parser_obj>)
-target_link_libraries(sif_parser_shared PUBLIC m)  # 鏈接數學庫
+target_link_libraries(sif_parser_shared PUBLIC m) 
 set_target_properties(sif_parser_shared PROPERTIES
     VERSION ${PROJECT_VERSION}
     SOVERSION 1

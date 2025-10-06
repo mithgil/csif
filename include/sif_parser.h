@@ -12,6 +12,15 @@
 #define MAX_USER_TEXT_LENGTH 8192
 #define MAX_CALIBRATION_COEFFS 10
 
+typedef enum {
+    SIF_DATA_UNKNOWN = 0,
+    SIF_DATA_FLOAT32 = 1,
+    SIF_DATA_INT32 = 2,
+    SIF_DATA_INT16 = 3,
+    SIF_DATA_UINT16 = 4
+} SifDataType;
+
+
 typedef struct {
     int x0, y0, x1, y1;
     int xbin, ybin;
@@ -77,10 +86,16 @@ typedef struct {
 typedef struct {
     ImageTile *tiles;
     int tile_count;
-    int image_width;
-    int image_height;
     int frame_count;
     SifInfo info;
+    
+    void *raw_data;                    
+    size_t raw_data_size;              
+    int pixels_loaded;                 
+    
+    float *image_data;                 
+    double *wavelengths;               
+    
 } SifFile;
 
 // 主要函數
@@ -89,7 +104,6 @@ void sif_close(SifFile *sif_file);
 int extract_calibration(const SifInfo *info, double **calibration, int *calib_width, int *calib_frames);
 
 // 輔助函數
-int read_string(FILE *fp, char *buffer, int max_length);
 int read_until(FILE *fp, char *buffer, int max_length, char terminator);
 int read_int(FILE *fp);
 double read_float(FILE *fp);

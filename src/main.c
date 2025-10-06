@@ -4,7 +4,7 @@
 #include "sif_utils.h"
 
 //  ./bin/read_sif /home/tim/Documents/AS/data/andor/20250917/1OD_500uW_sapphire_200umFiber_.sif
-//  ./bin/debug_sif /home/tim/Documents/AS/data/andor/20250917/1OD_500uW_sapphire_200umFiber_.sif
+//  ./bin/read_sif /home/tim/Documents/AS/data/andor/20250908/monochrom_430_700_10_LED_2.sif
 
 int main(int argc, char *argv[]) {
     if (argc < 2) {
@@ -27,14 +27,15 @@ int main(int argc, char *argv[]) {
     if (fp) {
         SifFile sif_file;
         if (sif_open(fp, &sif_file) == 0) {
+            printf("\n");
             print_sif_info_summary(&sif_file.info);
             printf("\n");
             print_sif_file_structure(&sif_file);
             printf("\n");
             
             // 3. 顯示數據區域的十六進制轉儲
-            printf("3. Data Region Hex Dump (first 256 bytes):\n");
-            print_hex_dump(fp, sif_file.info.data_offset, 256);
+            //printf("3. Data Region Hex Dump (first 256 bytes):\n");
+            //print_hex_dump(fp, sif_file.info.data_offset, 256);
             
             sif_close(&sif_file);
         } else {
