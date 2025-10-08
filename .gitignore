@@ -1,8 +1,14 @@
 build/
 julia/
 python/
+
+# 測試相關
 tests/
-test_data/
+test/
+*_test.go
+*.test
+.coverage/
+.pytest_cache/
 
 # 編譯文件
 build/
@@ -28,4 +34,5 @@ Thumbs.db
 
 # 本地配置文件
 local.config
-*.local
+*.localtests/
+tests/

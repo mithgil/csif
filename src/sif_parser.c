@@ -94,7 +94,7 @@ static int read_line_directly(FILE *fp, char *buffer, int max_length) {
     
     buffer[i] = '\0';
     
-    // 處理可能的回車換行
+    // deal with carridge return
     if (c == '\r') {
         c = fgetc(fp);
         if (c != '\n') {
@@ -253,7 +253,7 @@ int sif_open(FILE *fp, SifFile *sif_file) {
     memset(sif_file, 0, sizeof(SifFile));
     sif_file->file_ptr = fp;
     
-    // 明確初始化 SifInfo 內部的指針
+    // initialize SifInfo internal pointer
     memset(&sif_file->info, 0, sizeof(SifInfo));
 
     info->raman_ex_wavelength = NAN;
