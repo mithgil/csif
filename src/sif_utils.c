@@ -1,4 +1,5 @@
 #include "sif_utils.h"
+#include "sif_parser.h"
 #include <ctype.h>
 #include <inttypes.h>  // 添加這個頭文件
 
@@ -24,31 +25,22 @@ void trim_trailing_whitespace(char *str) {
     }
 }
 
-void debug_print_some_lines(FILE* fp, long debug_pos, int num_lines){
 
-    printf("→ Debug: Checking actual data format at 0x%lX\n", debug_pos);
-
-    for (int i = 0; i < num_lines; i++) {  // 多讀幾行
-        char debug_line[256];
-        if (fgets(debug_line, sizeof(debug_line), fp) == NULL) break;
-        trim_trailing_whitespace(debug_line);
-        printf("  Line %d: '%s' (length: %lu)\n", i, debug_line, strlen(debug_line));
-    }
-
-    // 回到原來位置
-    fseek(fp, debug_pos, SEEK_SET);
-    printf("  Reset to position: 0x%lX\n", ftell(fp));
-}
 
 void debug_hex_dump(FILE* fp, long debug_pos, int num_bytes_to_dump) {
+
+    if (current_verbose_level < SIF_DEBUG) {
+        return;  // 如果不是 DEBUG 級別，直接返回
+    }
+
     // 保存當前位置
     long original_pos = ftell(fp);
     
     // 移動到指定位置
     fseek(fp, debug_pos, SEEK_SET);
     
-    printf("→ Debug Hex Dump starting from position: 0x%lX\n", debug_pos);
-    printf("Bytes to dump: %d\n\n", num_bytes_to_dump);
+    PRINT_DEBUG("→ Debug Hex Dump starting from position: 0x%lX\n", debug_pos);
+    PRINT_DEBUG("Bytes to dump: %d\n\n", num_bytes_to_dump);
     
     // 讀取數據
     unsigned char *buffer = (unsigned char*)malloc(num_bytes_to_dump);
@@ -60,9 +52,9 @@ void debug_hex_dump(FILE* fp, long debug_pos, int num_bytes_to_dump) {
     
     long bytes_read = fread(buffer, 1, num_bytes_to_dump, fp);
     
-    printf("Bytes actually read: %ld\n\n", bytes_read);
-    printf("Offset  Hex                                               ASCII\n");
-    printf("------  ------------------------------------------------  ----------------\n");
+    PRINT_DEBUG("Bytes actually read: %ld\n\n", bytes_read);
+    PRINT_DEBUG("Offset  Hex                                               ASCII\n");
+    PRINT_DEBUG("------  ------------------------------------------------  ----------------\n");
     
     // 計算要顯示的行數
     long lines_to_display = (bytes_read + 15) / 16;
@@ -71,67 +63,71 @@ void debug_hex_dump(FILE* fp, long debug_pos, int num_bytes_to_dump) {
         long offset = i * 16;
         long absolute_offset = debug_pos + offset;
         
-        printf("%06lX  ", absolute_offset);
+        PRINT_DEBUG("%06lX  ", absolute_offset);
         
         // 顯示十六進制
         for (int j = 0; j < 16; j++) {
             if (offset + j < bytes_read) {
-                printf("%02X ", buffer[offset + j]);
+                PRINT_DEBUG("%02X ", buffer[offset + j]);
             } else {
-                printf("   ");
+                PRINT_DEBUG("   ");
             }
         }
         
-        printf(" ");
+        PRINT_DEBUG(" ");
         
         // 顯示 ASCII
         for (int j = 0; j < 16 && offset + j < bytes_read; j++) {
             unsigned char c = buffer[offset + j];
             if (isprint(c)) {
-                printf("%c", c);
+                PRINT_DEBUG("%c", c);
             } else {
-                printf(".");
+                PRINT_DEBUG(".");
             }
         }
         
-        printf("\n");
+        PRINT_DEBUG("\n");
         
         // 標記特殊位置
         if (offset == 0) {
-            printf("       ^-- Start of dump (position 0x%lX)\n", debug_pos);
+            PRINT_DEBUG("       ^-- Start of dump (position 0x%lX)\n", debug_pos);
         }
         
         // 標記浮點數數據模式
         if (offset + 4 <= bytes_read) {
             // 檢查是否可能是浮點數數據 (常見的 0x44 模式)
             if (buffer[offset + 2] == 0x1C && buffer[offset + 3] == 0x44) {
-                printf("       ^-- Possible float data pattern: 1C 44\n");
+                PRINT_DEBUG("       ^-- Possible float data pattern: 1C 44\n");
             }
         }
     }
     
     // 顯示統計資訊
-    printf("\n=== Debug Hex Dump Summary ===\n");
-    printf("Start position: 0x%lX\n", debug_pos);
-    printf("Bytes requested: %d\n", num_bytes_to_dump);
-    printf("Bytes displayed: %ld\n", bytes_read);
-    printf("End position: 0x%lX\n", debug_pos + bytes_read);
+    PRINT_DEBUG("\n=== Debug Hex Dump Summary ===\n");
+    PRINT_DEBUG("Start position: 0x%lX\n", debug_pos);
+    PRINT_DEBUG("Bytes requested: %d\n", num_bytes_to_dump);
+    PRINT_DEBUG("Bytes displayed: %ld\n", bytes_read);
+    PRINT_DEBUG("End position: 0x%lX\n", debug_pos + bytes_read);
     
     // 清理並恢復位置
     free(buffer);
     fseek(fp, original_pos, SEEK_SET);
-    printf("Reset to original position: 0x%lX\n", original_pos);
+    PRINT_DEBUG("Reset to original position: 0x%lX\n", original_pos);
 }
 
 // 結合兩者的多功能調試函數
 void debug_comprehensive(FILE* fp, long debug_pos, int num_lines, int hex_dump_bytes) {
-    printf("=== Comprehensive Debug Analysis ===\n");
-    printf("Starting from position: 0x%lX\n\n", debug_pos);
+    if (current_verbose_level < SIF_DEBUG) {
+        return;  // 如果不是 DEBUG 級別，直接返回
+    }
+
+    PRINT_DEBUG("=== Comprehensive Debug Analysis ===\n");
+    PRINT_DEBUG("Starting from position: 0x%lX\n\n", debug_pos);
     
     // 1. 先顯示文字行
     debug_print_some_lines(fp, debug_pos, num_lines);
     
-    printf("\n");
+    PRINT_DEBUG("\n");
     
     // 2. 再顯示十六進制 dump
     debug_hex_dump(fp, debug_pos, hex_dump_bytes);
@@ -180,7 +176,11 @@ int32_t read_big_endian_int32(FILE *fp) {
 }
 
 // 打印 SIF 文件的第一行
-void print_sif_first_line(const char *filename) {
+void print_sif_first_line(const char *filename, SifInfo *info) {
+    if (current_verbose_level < SIF_DEBUG) {
+        return;  // 如果不是 DEBUG 級別，直接返回
+    }
+
     FILE *fp = fopen(filename, "rb");
     if (!fp) {
         printf("Error: Cannot open file %s\n", filename);
@@ -189,175 +189,132 @@ void print_sif_first_line(const char *filename) {
     
     char line[256];
     if (fgets(line, sizeof(line), fp)) {
-        printf("First line of %s:\n", filename);
-        printf("Hex: ");
+        PRINT_DEBUG("First line of %s:\n", filename);
+        PRINT_DEBUG("Hex: ");
         for (int i = 0; i < strlen(line) && i < 50; i++) {
-            printf("%02X ", (unsigned char)line[i]);
+            PRINT_DEBUG("%02X ", (unsigned char)line[i]);
         }
-        printf("\nText: ");
+        PRINT_DEBUG("\nText: ");
         for (int i = 0; i < strlen(line) && i < 50; i++) {
             if (isprint((unsigned char)line[i])) {
-                printf("%c", line[i]);
+                PRINT_DEBUG("%c", line[i]);
             } else {
-                printf(".");
+                PRINT_DEBUG(".");
             }
         }
-        printf("\n");
+        PRINT_DEBUG("\n");
     }
     
     fclose(fp);
 }
 
-// 打印 SIF 文件的前 N 行
-void print_sif_first_lines(const char *filename, int line_count) {
-    FILE *fp = fopen(filename, "rb");
-    if (!fp) {
-        printf("Error: Cannot open file %s\n", filename);
-        return;
-    }
-    
-    printf("First %d lines of %s:\n", line_count, filename);
-    printf("========================================\n");
-    
-    char line[512];
-    for (int i = 0; i < line_count; i++) {
-        if (!fgets(line, sizeof(line), fp)) {
-            break;
-        }
-        
-        printf("Line %2d (offset 0x%08lX):\n", i + 1, ftell(fp) - strlen(line));
-        
-        // 顯示十六進制
-        printf("  Hex: ");
-        int line_len = strlen(line);
-        for (int j = 0; j < line_len && j < 60; j++) {
-            printf("%02X ", (unsigned char)line[j]);
-            if ((j + 1) % 16 == 0) printf("\n       ");
-        }
-        printf("\n");
-        
-        // 顯示文本內容
-        printf("  Text: ");
-        for (int j = 0; j < line_len && j < 60; j++) {
-            unsigned char c = line[j];
-            if (isprint(c) && c != '\r' && c != '\n') {
-                printf("%c", c);
-            } else if (c == '\r' || c == '\n') {
-                printf("\\n");
-                if (c == '\r' && j + 1 < line_len && line[j + 1] == '\n') {
-                    j++; // 跳過 \n
-                }
-                break;
-            } else {
-                printf(".");
-            }
-        }
-        printf("\n");
-        
-        // 如果是第一行，特別檢查魔數
-        if (i == 0) {
-            if (strncmp(line, SIF_MAGIC, strlen(SIF_MAGIC)) == 0) {
-                printf("  ✓ Valid SIF magic string found\n");
-            } else {
-                printf("  ✗ Invalid SIF magic string\n");
-            }
-        }
-        
-        printf("\n");
-    }
-    
-    fclose(fp);
-}
-
-// 打印 SIF 文件資訊摘要
+// 工具函數內部的輸出也使用 sif_print
 void print_sif_info_summary(const SifInfo *info) {
-    if (!info) {
-        printf("Error: No SIF info provided\n");
-        return;
+    if (!info) return;
+    
+    PRINT_NORMAL("SIF File Information Summary:\n");
+    PRINT_NORMAL("=============================\n");
+    PRINT_NORMAL("Detector Type: %s\n", info->detector_type);
+    PRINT_NORMAL("Experiment Time: %" PRId64 "\n", info->experiment_time);
+    
+    if (info->detector_temperature < -900) {
+        PRINT_NORMAL("Detector Temperature: [SENSOR OFFLINE]\n");
+    } else {
+        PRINT_NORMAL("Detector Temperature: %.2f °C\n", info->detector_temperature);
     }
     
-    printf("SIF File Information Summary:\n");
-    printf("=============================\n");
-    printf("Detector Type: %s\n", info->detector_type);
-    printf("Experiment Time: %d\n", info->experiment_time);
-    printf("Detector Temperature: %.2f °C\n", info->detector_temperature);
-    printf("Original Filename: %s\n", info->original_filename);
-    printf("Spectrograph: %s\n", info->spectrograph);
-    printf("SIF Version: %d\n", info->sif_version);
-    printf("SIF Calibration Version: %d\n", info->sif_calb_version);
-    printf("Detector Dimensions: %d x %d\n", info->detector_width, info->detector_height);
-    printf("Image Size: %d x %d\n", info->image_width, info->image_height);
-    printf("Number of Frames: %d\n", info->number_of_frames);
-    printf("Number of Subimages: %d\n", info->number_of_subimages);
-    printf("Exposure Time: %.6f s\n", info->exposure_time);
-    printf("Cycle Time: %.6f s\n", info->cycle_time);
-
-    if (info->detector_temperature <= -998.0f) {
-        printf(" [SENSOR OFFLINE]");
-    }
-    printf("Data Offset: 0x%08lX\n", info->data_offset);
+    PRINT_NORMAL("Original Filename: %s\n", info->original_filename);
+    PRINT_NORMAL("Spectrograph: %s\n", info->spectrograph);
+    PRINT_NORMAL("SIF Version: %d\n", info->sif_version);
+    PRINT_NORMAL("SIF Calibration Version: %d\n", info->sif_calb_version);
+    PRINT_NORMAL("Detector Dimensions: %d x %d\n", info->detector_width, info->detector_height);
+    PRINT_NORMAL("Image Size: %d x %d\n", info->image_width, info->image_height);
+    PRINT_NORMAL("Number of Frames: %d\n", info->number_of_frames);
+    PRINT_NORMAL("Number of Subimages: %d\n", info->number_of_subimages);
+    PRINT_NORMAL("Exposure Time: %f s\n", info->exposure_time);
+    PRINT_NORMAL("Cycle Time: %f s\n", info->cycle_time);
+    PRINT_NORMAL("Data Offset: 0x%08lX\n", info->data_offset);
     
     if (info->calibration_coeff_count > 0) {
-        printf("Calibration Coefficients: ");
+        PRINT_NORMAL("Calibration Coefficients: ");
         for (int i = 0; i < info->calibration_coeff_count; i++) {
-            printf("%.6f ", info->calibration_coefficients[i]);
+            PRINT_NORMAL("%f ", info->calibration_coefficients[i]);
         }
-        printf("\n");
+        PRINT_NORMAL("\n");
     }
     
-    printf("Frame Axis: %s\n", info->frame_axis);
-    printf("Data Type: %s\n", info->data_type);
-    printf("Image Axis: %s\n", info->image_axis);
+    PRINT_NORMAL("Frame Axis: %s\n", info->frame_axis);
+    PRINT_NORMAL("Data Type: %s\n", info->data_type);
+    PRINT_NORMAL("Image Axis: %s\n", info->image_axis);
     
-    // 顯示時間戳記
     if (info->timestamps && info->number_of_frames > 0) {
-        printf("First 5 timestamps: ");
+        PRINT_VERBOSE("First 5 timestamps: ");
         for (int i = 0; i < 5 && i < info->number_of_frames; i++) {
-            printf("%" PRId64 " ", info->timestamps[i]);  // 使用跨平台的格式說明符
+            PRINT_VERBOSE("%" PRId64 " ", info->timestamps[i]);
         }
-        printf("\n");
+        PRINT_VERBOSE("\n");
     }
 }
 
-// 打印 SIF 文件結構資訊
 void print_sif_file_structure(const SifFile *sif_file) {
-    if (!sif_file) {
-        printf("Error: No SIF file provided\n");
-        return;
+    if (!sif_file) return;
+    
+    PRINT_NORMAL("SIF File Structure:\n");
+    PRINT_NORMAL("===================\n");
+    PRINT_NORMAL("Total Frames: %d\n", sif_file->info.number_of_frames);
+    PRINT_NORMAL("Image Size: %d x %d\n", sif_file->info.image_width, sif_file->info.image_height);
+    PRINT_NORMAL("Tile Count: %d\n", sif_file->tile_count);
+    PRINT_NORMAL("\n");
+    
+    PRINT_VERBOSE("Tile Information:\n");
+    for (int i = 0; i < sif_file->tile_count; i++) {
+        PRINT_VERBOSE("  Tile %d: offset=0x%08lX, size=%dx%d\n", 
+                     i, sif_file->tiles[i].offset, 
+                     sif_file->tiles[i].width, sif_file->tiles[i].height);
     }
     
-    printf("SIF File Structure:\n");
-    printf("===================\n");
-    printf("Total Frames: %d\n", sif_file->frame_count);
-    printf("Image Dimensions: %d x %d\n", sif_file->info.image_width, sif_file->info.image_height);
-    printf("Tile Count: %d\n", sif_file->tile_count);
-    
-    if (sif_file->tiles && sif_file->tile_count > 0) {
-        printf("\nTile Information:\n");
-        for (int i = 0; i < sif_file->tile_count && i < 5; i++) {
-            printf("  Tile %d: offset=0x%08lX, size=%dx%d\n", 
-                   i, sif_file->tiles[i].offset,
-                   sif_file->tiles[i].width, sif_file->tiles[i].height);
-        }
-        if (sif_file->tile_count > 5) {
-            printf("  ... and %d more tiles\n", sif_file->tile_count - 5);
-        }
-    }
-    
-    // 子圖像資訊
-    if (sif_file->info.subimages && sif_file->info.number_of_subimages > 0) {
-        printf("\nSubimage Information:\n");
-        for (int i = 0; i < sif_file->info.number_of_subimages; i++) {
-            const SubImageInfo *sub = &sif_file->info.subimages[i];
-            printf("  Subimage %d: area=(%d,%d)-(%d,%d), binning=%dx%d, size=%dx%d\n",
-                   i, sub->x0, sub->y0, sub->x1, sub->y1,
-                   sub->xbin, sub->ybin, sub->width, sub->height);
-        }
+    PRINT_VERBOSE("\nSubimage Information:\n");
+    for (int i = 0; i < sif_file->info.number_of_subimages; i++) {
+        PRINT_VERBOSE("  Subimage %d: area=(%d,%d)-(%d,%d), binning=%dx%d, size=%dx%d\n",
+                    i, sif_file->info.subimages[i].x0,     
+                        sif_file->info.subimages[i].y0,     
+                        sif_file->info.subimages[i].x1,     
+                        sif_file->info.subimages[i].y1,     
+                        sif_file->info.subimages[i].xbin,   
+                        sif_file->info.subimages[i].ybin,   
+                        sif_file->info.subimages[i].width, 
+                        sif_file->info.subimages[i].height);
     }
 }
+
+// 除錯函數使用 DEBUG 級別
+void debug_print_some_lines(FILE* fp, long debug_pos, int num_lines) {
+    long original_pos = ftell(fp);
+    fseek(fp, debug_pos, SEEK_SET);
+    
+    PRINT_DEBUG("→ Debug: Checking actual data format at 0x%lX\n", debug_pos);
+    
+    for (int i = 0; i < num_lines; i++) {
+        char debug_line[256];
+        if (fgets(debug_line, sizeof(debug_line), fp) == NULL) break;
+        trim_trailing_whitespace(debug_line);
+        PRINT_DEBUG("  Line %d: '%s' (length: %lu)\n", i, debug_line, strlen(debug_line));
+    }
+    
+    fseek(fp, original_pos, SEEK_SET);
+    PRINT_DEBUG("  Reset to position: 0x%lX\n", original_pos);
+}
+
 
 // 打印十六進制轉儲（支持從指定位置之前開始）
 void print_hex_dump(FILE *fp, int target_offset, int before_bytes, int after_bytes) {
+
+    // 這個函數本身輸出很多除錯資訊，應該只在 DEBUG 級別顯示
+    if (current_verbose_level < SIF_DEBUG) {
+        return;  
+    }
+    
+
     if (!fp) return;
     
     // 計算實際開始位置
@@ -372,10 +329,10 @@ void print_hex_dump(FILE *fp, int target_offset, int before_bytes, int after_byt
     int bytes_read;
     int total_bytes = 0;
     
-    printf("Hex Dump (offset 0x%08X, showing %d bytes before and %d bytes after):\n", 
+    PRINT_DEBUG("Hex Dump (offset 0x%08X, showing %d bytes before and %d bytes after):\n", 
            target_offset, before_bytes, after_bytes);
-    printf("Offset    Hex Content                     ASCII\n");
-    printf("--------  ------------------------------  ----------------\n");
+    PRINT_DEBUG("Offset    Hex Content                     ASCII\n");
+    PRINT_DEBUG("--------  ------------------------------  ----------------\n");
     
     while (total_bytes < total_length && 
            (bytes_read = fread(buffer, 1, 16, fp)) > 0) {
@@ -383,13 +340,13 @@ void print_hex_dump(FILE *fp, int target_offset, int before_bytes, int after_byt
         int current_offset = start_offset + total_bytes;
         
         // 顯示偏移量
-        printf("%08X  ", current_offset);
+        PRINT_DEBUG("%08X  ", current_offset);
         
         // 標記目標位置
         if (current_offset <= target_offset && (current_offset + bytes_read) > target_offset) {
-            printf(">");
+            PRINT_DEBUG(">");
         } else {
-            printf(" ");
+            PRINT_DEBUG(" ");
         }
         
         // 顯示十六進制
@@ -397,37 +354,37 @@ void print_hex_dump(FILE *fp, int target_offset, int before_bytes, int after_byt
             if (i < bytes_read) {
                 // 標記目標位置的字節
                 if (current_offset + i == target_offset) {
-                    printf("[%02X]", buffer[i]);
+                    PRINT_DEBUG("[%02X]", buffer[i]);
                 } else {
-                    printf("%02X ", buffer[i]);
+                    PRINT_DEBUG("%02X ", buffer[i]);
                 }
             } else {
-                printf("   ");
+                PRINT_DEBUG("   ");
             }
             
-            if (i == 7) printf(" ");
+            if (i == 7) PRINT_DEBUG(" ");
         }
         
-        printf(" ");
+        PRINT_DEBUG(" ");
         
         // 顯示 ASCII
         for (int i = 0; i < bytes_read; i++) {
             if (current_offset + i == target_offset) {
-                printf("["); // 開始標記
+                PRINT_DEBUG("["); // 開始標記
             }
             
             if (isprint(buffer[i])) {
-                printf("%c", buffer[i]);
+                PRINT_DEBUG("%c", buffer[i]);
             } else {
-                printf(".");
+                PRINT_DEBUG(".");
             }
             
             if (current_offset + i == target_offset) {
-                printf("]"); // 結束標記
+                PRINT_DEBUG("]"); // 結束標記
             }
         }
         
-        printf("\n");
+        PRINT_DEBUG("\n");
         
         total_bytes += bytes_read;
         if (total_bytes >= total_length) break;
@@ -435,8 +392,6 @@ void print_hex_dump(FILE *fp, int target_offset, int before_bytes, int after_byt
 }
 
 
-
-// 多項式計算函數
 double evaluate_polynomial(const double* coefficients, int coeff_count, double x) {
     double result = 0.0;
     for (int i = 0; i < coeff_count; i++) {
@@ -445,7 +400,6 @@ double evaluate_polynomial(const double* coefficients, int coeff_count, double x
     return result;
 }
 
-// 反轉係數陣列（對應 Julia 的 reverse）
 void reverse_coefficients(double* coefficients, int coeff_count) {
     for (int i = 0; i < coeff_count / 2; i++) {
         double temp = coefficients[i];
@@ -456,6 +410,8 @@ void reverse_coefficients(double* coefficients, int coeff_count) {
 
 // 主函數：檢索校準數據
 double* retrieve_calibration(SifInfo *info, int* calibration_size) {
+
+
     if (!info) {
         *calibration_size = 0;
         return NULL;
@@ -466,11 +422,11 @@ double* retrieve_calibration(SifInfo *info, int* calibration_size) {
         width = info->image_length;
     }
     
-    printf("→ Retrieving calibration data (width: %d)\n", width);
+    PRINT_VERBOSE("→ Retrieving calibration data (width: %d)\n", width);
     
     // 情況1: 有多個 frame 校準數據
     if (info->has_frame_calibrations && info->number_of_frames > 0) {
-        printf("  Found frame-specific calibrations for %d frames\n", info->number_of_frames);
+        PRINT_VERBOSE("  Found frame-specific calibrations for %d frames\n", info->number_of_frames);
         
         // 分配 2D 陣列：number_of_frames × width
         double* calibration = malloc(info->number_of_frames * width * sizeof(double));
@@ -494,11 +450,11 @@ double* retrieve_calibration(SifInfo *info, int* calibration_size) {
                 // 實際上等於恢復原狀，但保留邏輯對應
                 reverse_coefficients(coefficients, frame_calib->coeff_count);
                 
-                printf("    Frame %d: %d coefficients -> ", frame + 1, frame_calib->coeff_count);
+                PRINT_VERBOSE("    Frame %d: %d coefficients -> ", frame + 1, frame_calib->coeff_count);
                 for (int i = 0; i < frame_calib->coeff_count; i++) {
                     printf("%f ", coefficients[i]);
                 }
-                printf("\n");
+                PRINT_VERBOSE("\n");
                 
                 // 計算多項式值（對應 Julia 的 p.(1:width)）
                 for (int x = 0; x < width; x++) {
@@ -518,7 +474,7 @@ double* retrieve_calibration(SifInfo *info, int* calibration_size) {
     }
     // 情況2: 有單個校準數據
     else if (info->calibration_coeff_count > 0) {
-        printf("  Found global calibration data: %d coefficients\n", info->calibration_coeff_count);
+        PRINT_VERBOSE("  Found global calibration data: %d coefficients\n", info->calibration_coeff_count);
         
         // 分配 1D 陣列：width
         double* calibration = malloc(width * sizeof(double));
@@ -537,11 +493,11 @@ double* retrieve_calibration(SifInfo *info, int* calibration_size) {
         // 再次反轉（對應 Julia 的 Polynomial(reverse(reverse_coef))）
         reverse_coefficients(coefficients, info->calibration_coeff_count);
         
-        printf("    Coefficients: ");
+        PRINT_VERBOSE("    Coefficients: ");
         for (int i = 0; i < info->calibration_coeff_count; i++) {
-            printf("%f ", coefficients[i]);
+            PRINT_VERBOSE("%f ", coefficients[i]);
         }
-        printf("\n");
+        PRINT_VERBOSE("\n");
         
         // 計算多項式值（對應 Julia 的 p.(1:width)）
         for (int x = 0; x < width; x++) {
@@ -553,7 +509,7 @@ double* retrieve_calibration(SifInfo *info, int* calibration_size) {
     }
     // 情況3: 沒有校準數據
     else {
-        printf("  No calibration data found\n");
+        PRINT_VERBOSE("  No calibration data found\n");
         *calibration_size = 0;
         return NULL;
     }

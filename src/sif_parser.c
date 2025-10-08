@@ -3,8 +3,8 @@
 #include <ctype.h>
 #include <inttypes.h>
 
-
-static SifVerboseLevel current_verbose_level = SIF_NORMAL;
+// 移除 static，現在是全局變數（外部鏈接）
+SifVerboseLevel current_verbose_level = SIF_NORMAL;
 
 void sif_set_verbose_level(SifVerboseLevel level) {
     current_verbose_level = level;
@@ -782,7 +782,7 @@ int sif_open(FILE *fp, SifFile *sif_file) {
                 sif_file->tiles[f].height = info->image_height;
                 sif_file->tiles[f].frame_index = f;
                 
-                printf("    Tile %d: offset=0x%08lX, size=%dx%d\n", 
+                PRINT_VERBOSE("    Tile %d: offset=0x%08lX, size=%dx%d\n", 
                     f, sif_file->tiles[f].offset,
                     sif_file->tiles[f].width, sif_file->tiles[f].height);
             }
@@ -1202,7 +1202,7 @@ int sif_load_all_frames(SifFile *sif_file, int enable_byte_swap) {
             
             PRINT_VERBOSE("    Original bytes -> Values:\n");
             for (int j = 0; j < 10 && j < frame_size; j++) {
-                printf("    Pixel %d: %02X %02X %02X %02X -> %.1f\n",
+                PRINT_VERBOSE("    Pixel %d: %02X %02X %02X %02X -> %.1f\n",
                        j, raw_bytes[j*4], raw_bytes[j*4+1], 
                        raw_bytes[j*4+2], raw_bytes[j*4+3], frame_start[j]);
             }

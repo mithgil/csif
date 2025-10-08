@@ -16,12 +16,15 @@
 #define MAX_COEFFICIENTS 20
 
 typedef enum {
-    SIF_SILENT = 0,     // 完全靜默，只返回錯誤碼
-    SIF_QUIET = 1,      // 只顯示重要結果
-    SIF_NORMAL = 2,     // 顯示基本進度資訊
-    SIF_VERBOSE = 3,    // 顯示詳細解析過程
-    SIF_DEBUG = 4       // 顯示所有除錯資訊
+    SIF_SILENT = 0,    // 無輸出（錯誤訊息除外）
+    SIF_QUIET = 1,     // 只顯示最重要結果
+    SIF_NORMAL = 2,    // 顯示基本進度資訊（推薦默認）
+    SIF_VERBOSE = 3,   // 顯示詳細解析過程
+    SIF_DEBUG = 4      // 顯示所有除錯資訊
 } SifVerboseLevel;
+
+extern SifVerboseLevel current_verbose_level;
+
 
 typedef struct {
     int x0, y0, x1, y1;

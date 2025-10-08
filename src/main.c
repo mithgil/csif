@@ -7,23 +7,23 @@
 //  ./bin/read_sif /home/tim/Documents/AS/data/andor/20250908/monochrom_430_700_10_LED_2.sif
 
 int main(int argc, char *argv[]) {
-    // 默認級別
-    SifVerboseLevel level = SIF_NORMAL;
-    
-    // 根據命令行參數調整
-    for (int i = 1; i < argc; i++) {
-        if (strcmp(argv[i], "-q") == 0 || strcmp(argv[i], "--quiet") == 0) {
-            level = SIF_QUIET;
-        } else if (strcmp(argv[i], "-v") == 0 || strcmp(argv[i], "--verbose") == 0) {
-            level = SIF_VERBOSE;
-        } else if (strcmp(argv[i], "-d") == 0 || strcmp(argv[i], "--debug") == 0) {
-            level = SIF_DEBUG;
-        } else if (strcmp(argv[i], "-s") == 0 || strcmp(argv[i], "--silent") == 0) {
-            level = SIF_SILENT;
-        }
+    if (argc < 2) {
+        fprintf(stderr, "Usage: %s <filename> [options]\n", argv[0]);
+        return 1;
     }
 
     const char *filename = argv[1];
+    SifVerboseLevel level = SIF_NORMAL;
+
+    // 從第2個參數開始處理選項
+    for (int i = 2; i < argc; i++) {
+        if (strcmp(argv[i], "-q") == 0) level = SIF_QUIET;
+        else if (strcmp(argv[i], "-v") == 0) level = SIF_VERBOSE;
+        else if (strcmp(argv[i], "-d") == 0) level = SIF_DEBUG;
+        else if (strcmp(argv[i], "-s") == 0) level = SIF_SILENT;
+    }
+
+    sif_set_verbose_level(level);
 
     // 設置輸出級別（可以在 main 函數開始時設置）
     sif_set_verbose_level(level);  // 或者 SIF_QUIET, SIF_VERBOSE 等
