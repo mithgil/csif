@@ -11,6 +11,8 @@
 #define MAX_STRING_LENGTH 1024
 #define MAX_USER_TEXT_LENGTH 8192
 #define MAX_CALIBRATION_COEFFS 10
+#define MAX_FRAMES 100
+#define MAX_COEFFICIENTS 20
 
 typedef enum {
     BYTE_SWAP_DISABLE = 0,
@@ -23,11 +25,19 @@ typedef struct {
     int width, height;
 } SubImageInfo;
 
+
+typedef struct {
+    double coefficients[MAX_COEFFICIENTS];
+    int coeff_count;
+} FrameCalibration;
+
 typedef struct {
     char detector_type[MAX_STRING_LENGTH];
     char original_filename[MAX_STRING_LENGTH];
     char spectrograph[MAX_STRING_LENGTH];
     char user_text[MAX_USER_TEXT_LENGTH];
+    int user_text_length; 
+    int user_text_processed;  
     char frame_axis[MAX_STRING_LENGTH];
     char data_type[MAX_STRING_LENGTH];
     char image_axis[MAX_STRING_LENGTH];
@@ -43,7 +53,7 @@ typedef struct {
     int detector_width;
     int detector_height;
     int xbin, ybin;
-    
+        
     double detector_temperature;
     double exposure_time;
     double cycle_time;
@@ -57,12 +67,15 @@ typedef struct {
     double gate_gain;
     double gate_delay;
     double raman_ex_wavelength;
+
+    char calibration_data[256];  
+    double calibration_coefficients[10];
+    int calibration_coeff_count;  
+
+    int has_frame_calibrations;    
+    FrameCalibration frame_calibrations[MAX_FRAMES];
     
-    double *calibration_data; 
-    int calibration_data_count;
-    double *frame_calibrations;
-    int has_frame_calibrations;
-    
+
     SubImageInfo *subimages;
     int64_t *timestamps;
     
@@ -117,5 +130,8 @@ int read_int(FILE *fp);
 double read_float(FILE *fp);
 void skip_spaces(FILE *fp);
 void extract_user_text(SifInfo *info);
+void extract_frame_calibrations(SifInfo *info, int start_pos);
+void parse_calibration_coefficients(SifInfo *info);
+void parse_frame_calibration_coefficients(SifInfo *info, int frame, const char* data_str);
 
 #endif

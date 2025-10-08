@@ -277,7 +277,10 @@ int sif_open(FILE *fp, SifFile *sif_file) {
     memset(&sif_file->info, 0, sizeof(SifInfo));
 
     info->raman_ex_wavelength = NAN;
-    info->calibration_data_count = 0;
+    info->calibration_data[0] = '\0';  
+    info->calibration_coeff_count = 0;
+    info->has_frame_calibrations = 0;
+
     
     printf("=== Starting SIF File Parsing ===\n");
     
@@ -384,13 +387,12 @@ int sif_open(FILE *fp, SifFile *sif_file) {
     if (user_text_length > 0 && user_text_length < sizeof(info->user_text)) {
         if (fread(info->user_text, 1, user_text_length, fp) == user_text_length) {
             info->user_text[user_text_length] = '\0';
-            printf("  User text: %d bytes\n", user_text_length);
+            info->user_text_length = user_text_length;
+            printf("  User text: %d bytes\n", info->user_text_length);
         }
     }
     discard_line(fp); // 讀取換行符
 
-
-   // Line 9: Shutter Time 信息
     // Line 9: Shutter Time 信息
     printf("→ Line 9: Reading shutter time...\n");
     long line9_start = ftell(fp);
@@ -400,16 +402,13 @@ int sif_open(FILE *fp, SifFile *sif_file) {
     int line9_marker = read_int(fp);
     if (line9_marker != 65538) {
         printf("  ⚠️ Unexpected marker in Line 9: %d (expected 65538)\n", line9_marker);
-        // 可以選擇繼續或返回錯誤
     }
 
     printf("  Line 9 marker: %d\n", line9_marker);
 
-    // 跳過 8 個字節
     discard_bytes(fp, 8);
     printf("  Skipped 8 bytes\n");
 
-    // 讀取快門時間
     info->shutter_time[0] = read_float(fp);
     info->shutter_time[1] = read_float(fp);
 
@@ -421,16 +420,12 @@ int sif_open(FILE *fp, SifFile *sif_file) {
 
     printf("✓ Shutter Time: %.6f, %.6f\n", info->shutter_time[0], info->shutter_time[1]);
 
-    // 處理行結束
-    skip_spaces(fp); // 跳過可能的多餘空格
+    skip_spaces(fp); 
     printf("  After Line 9, position: 0x%lX\n", ftell(fp));
-
-    
 
     printf("→ Version-specific skipping logic...\n");
     printf("  SIF Version: %d\n", info->sif_version);
 
-    // 根據 Python 代碼的邏輯
     if (info->sif_version >= 65548 && info->sif_version <= 65557) {
         printf("  Version 65548-65557: skipping 2 lines\n");
         for (int i = 0; i < 2; i++) discard_line(fp);
@@ -498,7 +493,6 @@ int sif_open(FILE *fp, SifFile *sif_file) {
     }
 
     printf("  After version skipping, position: 0x%lX\n", ftell(fp));
-
     
     printf("→ Reading calibration and additional data...\n");
 
@@ -512,9 +506,17 @@ int sif_open(FILE *fp, SifFile *sif_file) {
 
     // calibration data
     char calib_line[MAX_STRING_LENGTH];
-    if (fgets(calib_line, sizeof(calib_line), fp) == NULL) return -1;
-    trim_trailing_whitespace(calib_line);
-    printf("✓ Calibration Data: %s\n", calib_line);
+    if (fgets(calib_line, sizeof(calib_line), fp) == NULL) {
+        printf("  Warning: Failed to read calibration data line\n");
+        info->calibration_data[0] = '\0'; // 設為空字串
+    } else {
+        trim_trailing_whitespace(calib_line);
+        printf("✓ Calibration Data: %s\n", calib_line);
+        
+        // 正確複製字串到結構體
+        strncpy(info->calibration_data, calib_line, sizeof(info->calibration_data) - 1);
+        info->calibration_data[sizeof(info->calibration_data) - 1] = '\0';
+    }
 
     discard_line(fp);
     printf("  Skipped old calibration data\n");
@@ -777,55 +779,172 @@ int sif_open(FILE *fp, SifFile *sif_file) {
         }
     }
 
+    // 在 sif_open 中，呼叫 extract_user_text 之前：
+    printf("  Before extract_user_text:\n");
+    printf("    user_text pointer: %p\n", info->user_text);
+    printf("    user_text[0]: 0x%02X\n", (unsigned char)info->user_text[0]);
+    printf("    strlen(user_text): %lu\n", strlen(info->user_text));
+    printf("    user_text_length: %d\n", info->user_text_length);
+
+    // 手動檢查前幾個字節
+    printf("    First 10 bytes: ");
+    for (int i = 0; i < 10 && i < user_text_length; i++) {
+        printf("%02X ", (unsigned char)info->user_text[i]);
+    }
+    printf("\n");
+
+
     // 清理和提取 user_text 中的校準數據
     extract_user_text(info);
+
+    printf("✓ SIF file parsing successfully");
 
     return 0;
 }
 
-void extract_user_text(SifInfo *info) {
-    if (!info || !info->user_text || strlen(info->user_text) == 0) {
+
+void extract_frame_calibrations(SifInfo *info, int start_pos) {
+    if (!info || !info->user_text || start_pos < 0 || start_pos >= info->user_text_length) {
         return;
     }
     
-    printf("→ Analyzing user text (%lu bytes)...\n", strlen(info->user_text));
+    printf("→ Extracting frame calibration data from position %d\n", start_pos);
     
-    // 簡單分析 user_text 內容
-    int text_chars = 0;
-    int binary_chars = 0;
+    // 複製 user_text 到可修改的緩衝區
+    char* text_copy = malloc(info->user_text_length + 1);
+    if (!text_copy) {
+        printf("  Memory allocation failed\n");
+        return;
+    }
+    memcpy(text_copy, info->user_text, info->user_text_length);
+    text_copy[info->user_text_length] = '\0';
     
-    for (size_t i = 0; i < strlen(info->user_text) && i < 100; i++) {
-        if (isprint((unsigned char)info->user_text[i])) {
-            text_chars++;
-        } else {
-            binary_chars++;
+    char* current_pos = text_copy + start_pos;
+    
+    // 為每個 frame 提取校準數據
+    for (int frame = 1; frame <= info->number_of_frames; frame++) {
+        // 構建目標關鍵字 "Calibration data for frame X"
+        char target[64];
+        snprintf(target, sizeof(target), "Calibration data for frame %d", frame);
+        
+        // 尋找這個 frame 的校準數據
+        char* frame_start = strstr(current_pos, target);
+        if (!frame_start) {
+            printf("  ✗ Calibration data for frame %d not found\n", frame);
+            continue;
+        }
+        
+        // 移動到數據部分（跳過關鍵字和冒號）
+        char* data_start = frame_start + strlen(target);
+        
+        // 跳過空白和冒號
+        while (*data_start && (isspace((unsigned char)*data_start) || *data_start == ':')) {
+            data_start++;
+        }
+        
+        if (!*data_start) {
+            printf("  ✗ No data after calibration marker for frame %d\n", frame);
+            continue;
+        }
+        
+        // 找到行尾或數據結束
+        char* data_end = data_start;
+        while (*data_end && *data_end != '\n' && *data_end != '\r') {
+            data_end++;
+        }
+        
+        // 提取數據字串
+        size_t data_len = data_end - data_start;
+        char data_str[256];
+        if (data_len >= sizeof(data_str)) {
+            data_len = sizeof(data_str) - 1;
+        }
+        memcpy(data_str, data_start, data_len);
+        data_str[data_len] = '\0';
+        
+        printf("  Frame %d calibration data: '%s'\n", frame, data_str);
+        
+        // 解析係數（逗號分隔）
+        parse_frame_calibration_coefficients(info, frame, data_str);
+        
+        // 移動到下一個位置
+        current_pos = data_end;
+    }
+    
+    free(text_copy);
+    info->has_frame_calibrations = 1;
+}
+
+
+void parse_frame_calibration_coefficients(SifInfo *info, int frame, const char* data_str) {
+    if (!info || !data_str) {
+        printf("    Error: Invalid parameters for frame %d\n", frame);
+        return;
+    }
+    
+    printf("    Parsing coefficients for frame %d: '%s'\n", frame, data_str);
+    
+    // 複製字串以便修改（使用 strtok 會修改原字串）
+    char* data_copy = strdup(data_str);
+    if (!data_copy) {
+        printf("    Memory allocation failed for frame %d\n", frame);
+        return;
+    }
+    
+    char* token;
+    char* rest = data_copy;
+    int coeff_count = 0;
+    double coefficients[20]; // 假設最多20個係數
+    
+    // 去除前後空白
+    char* trimmed = rest;
+    while (isspace((unsigned char)*trimmed)) trimmed++;
+    char* end = trimmed + strlen(trimmed) - 1;
+    while (end > trimmed && isspace((unsigned char)*end)) end--;
+    *(end + 1) = '\0';
+    
+    rest = trimmed;
+    
+    // 使用逗號分割（對應 Julia 的 split(..., ',')）
+    while ((token = strtok_r(rest, ",", &rest))) {
+        if (coeff_count < 20) {
+            // 去除 token 的空白
+            char* token_trim = token;
+            while (isspace((unsigned char)*token_trim)) token_trim++;
+            char* token_end = token_trim + strlen(token_trim) - 1;
+            while (token_end > token_trim && isspace((unsigned char)*token_end)) token_end--;
+            *(token_end + 1) = '\0';
+            
+            if (strlen(token_trim) > 0) {
+                char* endptr;
+                double value = strtod(token_trim, &endptr);
+                
+                if (endptr != token_trim) { // 成功轉換
+                    coefficients[coeff_count++] = value;
+                    printf("      Coefficient %d: %f\n", coeff_count, value);
+                } else {
+                    printf("      Warning: Failed to parse '%s' as float\n", token_trim);
+                }
+            }
         }
     }
     
-    printf("  User text analysis: %d printable chars, %d binary chars (first 100 bytes)\n", 
-           text_chars, binary_chars);
-    
-    // 檢查是否包含校準數據標記
-    if (strstr(info->user_text, "Calibration") != NULL) {
-        printf("  Contains calibration data\n");
-        info->has_frame_calibrations = 1;
+    // 保存係數到 info 結構
+    if (coeff_count > 0) {
+        // 確保不會超出陣列範圍
+        if (frame <= MAX_FRAMES) {
+            info->frame_calibrations[frame-1].coeff_count = coeff_count;
+            memcpy(info->frame_calibrations[frame-1].coefficients, coefficients, 
+                   coeff_count * sizeof(double));
+            printf("    ✓ Frame %d: %d coefficients parsed and saved\n", frame, coeff_count);
+        } else {
+            printf("    ✗ Frame %d: frame number exceeds maximum (%d)\n", frame, MAX_FRAMES);
+        }
     } else {
-        info->has_frame_calibrations = 0;
+        printf("    ✗ Frame %d: no valid coefficients found\n", frame);
     }
     
-    // 顯示前100個字節的內容（用於調試）
-    printf("  First 100 bytes: ");
-    for (int i = 0; i < 100 && i < strlen(info->user_text); i++) {
-        unsigned char c = info->user_text[i];
-        if (isprint(c) && c != '\r' && c != '\n') {
-            printf("%c", c);
-        } else {
-            printf("\\x%02X", c);
-        }
-    }
-    printf("\n");
-    // 清理 user_text，因為信息已經提取
-    info->user_text[0] = '\0'; //清空 user_text 以節省內存
+    free(data_copy);
 }
 
 int extract_calibration(const SifInfo *info, double **calibration, 
@@ -850,7 +969,7 @@ int extract_calibration(const SifInfo *info, double **calibration,
             }
         }
         
-    } else if (info->calibration_data_count > 0) {
+    } else if (info->calibration_coeff_count > 0) {
         // Single calibration
         *calib_frames = 1;
         *calib_width = width;
@@ -864,7 +983,7 @@ int extract_calibration(const SifInfo *info, double **calibration,
             double value = 0;
             double x_power = 1;
             
-            for (int j = 0; j < info->calibration_data_count; j++) {
+            for (int j = 0; j < info->calibration_coeff_count; j++) {
                 value += info->calibration_data[j] * x_power;
                 x_power *= x;
             }
@@ -880,6 +999,127 @@ int extract_calibration(const SifInfo *info, double **calibration,
     }
     
     return 0;
+}
+
+void parse_calibration_coefficients(SifInfo *info) {
+    if (!info || info->calibration_data[0] == '\0') {
+        info->calibration_coeff_count = 0;  // 標記為失敗
+        return;
+    }
+    
+    printf("→ Parsing calibration coefficients from: '%s'\n", info->calibration_data);
+    
+    // 複製字串以便修改
+    char* data_copy = strdup(info->calibration_data);
+    if (!data_copy) {
+        info->calibration_coeff_count = 0;
+        return;
+    }
+    
+    char* token;
+    char* rest = data_copy;
+    int coeff_count = 0;
+    double coefficients[10];
+    
+    // 去除前後空白
+    char* trimmed = rest;
+    while (isspace((unsigned char)*trimmed)) trimmed++;
+    char* end = trimmed + strlen(trimmed) - 1;
+    while (end > trimmed && isspace((unsigned char)*end)) end--;
+    *(end + 1) = '\0';
+    
+    rest = trimmed;
+    
+    // 使用空白分割
+    while ((token = strtok_r(rest, " \t", &rest))) {
+        if (coeff_count < 10) {
+            char* endptr;
+            double value = strtod(token, &endptr);
+            
+            if (endptr != token) { // 成功轉換
+                coefficients[coeff_count++] = value;
+                printf("    Coefficient %d: %f\n", coeff_count, value);
+            } else {
+                // 解析失敗
+                printf("    Failed to parse '%s' as float\n", token);
+                free(data_copy);
+                info->calibration_coeff_count = 0;
+                return;
+            }
+        }
+    }
+    
+    free(data_copy);
+    
+    if (coeff_count > 0) {
+        // 保存解析後的係數
+        info->calibration_coeff_count = coeff_count;
+        memcpy(info->calibration_coefficients, coefficients, coeff_count * sizeof(double));
+
+    } else {
+        info->calibration_coeff_count = 0; // 失敗
+    }
+}
+
+void extract_user_text(SifInfo *info) {
+    if (!info || !info->user_text || info->user_text_length == 0) {
+        printf("  Skip: no user text to process\n");
+        return;
+    }
+    
+    printf("→ extract_user_text analysis:\n");
+    printf("  user_text_length: %d\n", info->user_text_length);
+    printf("  calibration_data: '%s'\n", info->calibration_data);
+    
+    // 搜尋 "Calibration data for" - 只在 user_text 的前20個字節中搜尋！
+    const char* target = "Calibration data for";
+    int found = 0;
+    
+    int search_limit = (info->user_text_length < 20) ? info->user_text_length : 20;
+    
+    for (int i = 0; i <= search_limit - strlen(target); i++) {
+        if (strncmp(&info->user_text[i], target, strlen(target)) == 0) {
+            printf("  ✓ Found '%s' in first %d bytes of user_text at position %d\n", 
+                   target, search_limit, i);
+            found = 1;
+            
+            extract_frame_calibrations(info, i);
+            
+            info->calibration_data[0] = '\0';
+            info->calibration_coeff_count = 0;
+            
+            break;
+        }
+    }
+    
+    if (!found) {
+        printf("  ✗ '%s' not found in first %d bytes of user_text\n", target, search_limit);
+        
+        // 情況2: 沒有找到目標，處理現有的 calibration_data
+        if (info->calibration_data[0] != '\0') {
+            printf("  calibration_data is a string: '%s'\n", info->calibration_data);
+            
+            // 嘗試解析校準係數
+            parse_calibration_coefficients(info);  // 現在是 void 函數
+            
+            // 檢查是否解析成功（通過 calibration_coeff_count）
+            if (info->calibration_coeff_count > 0) {
+                printf("  ✓ Successfully parsed %d calibration coefficients\n", 
+                       info->calibration_coeff_count);
+            } else {
+                // 解析失敗，對應 Julia 的 delete!(meta, "Calibration_data")
+                printf("  ✗ Failed to parse calibration coefficients, clearing data\n");
+                info->calibration_data[0] = '\0';
+                info->calibration_coeff_count = 0;
+            }
+        } else {
+            printf("  calibration_data is empty or not a string, clearing\n");
+            info->calibration_coeff_count = 0;
+        }
+    }
+    
+    info->user_text_processed = 1;
+    printf("✓ User text processing completed\n");
 }
 
 // 專門的字節序交換函數
@@ -1038,8 +1278,7 @@ static void cleanup_sif_info(SifInfo *info) {
     }
     
     if (info->calibration_data) {
-        free(info->calibration_data);
-        info->calibration_data = NULL;
+        info->calibration_data[0] = '\0';  
     }
 }
 void sif_close(SifFile *sif_file) {

@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <errno.h>
+#include <math.h>
 
 static int read_binary_string(FILE *fp, char *buffer, int max_length, int length);
 static int read_line_with_binary_check(FILE *fp, char *buffer, int max_length);
@@ -296,10 +297,10 @@ void print_sif_info_summary(const SifInfo *info) {
     }
     printf("Data Offset: 0x%08lX\n", info->data_offset);
     
-    if (info->calibration_data_count > 0) {
+    if (info->calibration_coeff_count > 0) {
         printf("Calibration Coefficients: ");
-        for (int i = 0; i < info->calibration_data_count; i++) {
-            printf("%.6f ", info->calibration_data[i]);
+        for (int i = 0; i < info->calibration_coeff_count; i++) {
+            printf("%.6f ", info->calibration_coefficients[i]);
         }
         printf("\n");
     }
@@ -430,5 +431,130 @@ void print_hex_dump(FILE *fp, int target_offset, int before_bytes, int after_byt
         
         total_bytes += bytes_read;
         if (total_bytes >= total_length) break;
+    }
+}
+
+
+
+// 多項式計算函數
+double evaluate_polynomial(const double* coefficients, int coeff_count, double x) {
+    double result = 0.0;
+    for (int i = 0; i < coeff_count; i++) {
+        result += coefficients[i] * pow(x, i);
+    }
+    return result;
+}
+
+// 反轉係數陣列（對應 Julia 的 reverse）
+void reverse_coefficients(double* coefficients, int coeff_count) {
+    for (int i = 0; i < coeff_count / 2; i++) {
+        double temp = coefficients[i];
+        coefficients[i] = coefficients[coeff_count - 1 - i];
+        coefficients[coeff_count - 1 - i] = temp;
+    }
+}
+
+// 主函數：檢索校準數據
+double* retrieve_calibration(SifInfo *info, int* calibration_size) {
+    if (!info) {
+        *calibration_size = 0;
+        return NULL;
+    }
+    
+    int width = info->detector_width;
+    if (info->image_length > 0) {
+        width = info->image_length;
+    }
+    
+    printf("→ Retrieving calibration data (width: %d)\n", width);
+    
+    // 情況1: 有多個 frame 校準數據
+    if (info->has_frame_calibrations && info->number_of_frames > 0) {
+        printf("  Found frame-specific calibrations for %d frames\n", info->number_of_frames);
+        
+        // 分配 2D 陣列：number_of_frames × width
+        double* calibration = malloc(info->number_of_frames * width * sizeof(double));
+        if (!calibration) {
+            *calibration_size = 0;
+            return NULL;
+        }
+        
+        for (int frame = 0; frame < info->number_of_frames; frame++) {
+            FrameCalibration* frame_calib = &info->frame_calibrations[frame];
+            
+            if (frame_calib->coeff_count > 0) {
+                // 複製係數以便反轉（不修改原始數據）
+                double coefficients[MAX_COEFFICIENTS];
+                memcpy(coefficients, frame_calib->coefficients, frame_calib->coeff_count * sizeof(double));
+                
+                // 反轉係數（對應 Julia 的 reverse_coef = reverse(meta[key])）
+                reverse_coefficients(coefficients, frame_calib->coeff_count);
+                
+                // 再次反轉（對應 Julia 的 Polynomial(reverse(reverse_coef))）
+                // 實際上等於恢復原狀，但保留邏輯對應
+                reverse_coefficients(coefficients, frame_calib->coeff_count);
+                
+                printf("    Frame %d: %d coefficients -> ", frame + 1, frame_calib->coeff_count);
+                for (int i = 0; i < frame_calib->coeff_count; i++) {
+                    printf("%f ", coefficients[i]);
+                }
+                printf("\n");
+                
+                // 計算多項式值（對應 Julia 的 p.(1:width)）
+                for (int x = 0; x < width; x++) {
+                    double pixel_value = evaluate_polynomial(coefficients, frame_calib->coeff_count, x + 1);
+                    calibration[frame * width + x] = pixel_value;
+                }
+            } else {
+                // 如果沒有校準數據，填充 0
+                for (int x = 0; x < width; x++) {
+                    calibration[frame * width + x] = 0.0;
+                }
+            }
+        }
+        
+        *calibration_size = info->number_of_frames * width;
+        return calibration;
+    }
+    // 情況2: 有單個校準數據
+    else if (info->calibration_coeff_count > 0) {
+        printf("  Found global calibration data: %d coefficients\n", info->calibration_coeff_count);
+        
+        // 分配 1D 陣列：width
+        double* calibration = malloc(width * sizeof(double));
+        if (!calibration) {
+            *calibration_size = 0;
+            return NULL;
+        }
+        
+        // 複製係數以便反轉
+        double coefficients[MAX_COEFFICIENTS];
+        memcpy(coefficients, info->calibration_coefficients, info->calibration_coeff_count * sizeof(double));
+        
+        // 反轉係數（對應 Julia 的 reverse_coef = reverse(meta["Calibration_data"])）
+        reverse_coefficients(coefficients, info->calibration_coeff_count);
+        
+        // 再次反轉（對應 Julia 的 Polynomial(reverse(reverse_coef))）
+        reverse_coefficients(coefficients, info->calibration_coeff_count);
+        
+        printf("    Coefficients: ");
+        for (int i = 0; i < info->calibration_coeff_count; i++) {
+            printf("%f ", coefficients[i]);
+        }
+        printf("\n");
+        
+        // 計算多項式值（對應 Julia 的 p.(1:width)）
+        for (int x = 0; x < width; x++) {
+            calibration[x] = evaluate_polynomial(coefficients, info->calibration_coeff_count, x + 1);
+        }
+        
+        *calibration_size = width;
+        return calibration;
+    }
+    // 情況3: 沒有校準數據
+    else {
+        printf("  No calibration data found\n");
+        *calibration_size = 0;
+        return NULL;
     }
 }

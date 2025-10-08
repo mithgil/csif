@@ -14,16 +14,7 @@ int main(int argc, char *argv[]) {
     
     const char *filename = argv[1];
     
-    printf("=== SIF File Analysis Tool ===\n\n");
-    
-    // 1. 打印第一行
-    printf("1. First Line Analysis:\n");
-    print_sif_first_line(filename);
-    printf("\n");
-       
-    // 2. 完整解析並顯示資訊
-    
-    printf("3. Complete File Analysis:\n");
+    printf("======Complete File Analysis:======\n");
     FILE *fp = fopen(filename, "rb");
     if (fp) {
         SifFile sif_file;
@@ -38,7 +29,7 @@ int main(int argc, char *argv[]) {
             sif_file.tile_count, 
             sif_file.tiles[0].width, 
             sif_file.tiles[0].height);
-    
+
             //sif_load_all_frames(SifFile *sif_file, int byte_swap)
             if (sif_load_all_frames(&sif_file, 0) ==  0) {
                 float *frame0 = sif_get_frame_data(&sif_file, 0);
@@ -57,6 +48,39 @@ int main(int argc, char *argv[]) {
                     printf("Data range: %.1f to %.1f\n", min_val, max_val);
                 }
             }
+
+            int calibration_size;
+            double* calibration = retrieve_calibration(&sif_file.info, &calibration_size);
+            
+            if (calibration) {
+                // 修正：使用 . 而不是 ->
+                if (sif_file.info.has_frame_calibrations) {
+                    // 2D 數據：number_of_frames × width
+                    printf("Retrieved 2D calibration data (%d frames × %d pixels):\n", 
+                        sif_file.info.number_of_frames, sif_file.info.detector_width);
+                    
+                    for (int frame = 0; frame < sif_file.info.number_of_frames; frame++) {
+                        printf("  Frame %d: ", frame + 1);
+                        for (int pixel = 0; pixel < 5; pixel++) { // 只顯示前5個像素
+                            printf("%f ", calibration[frame * sif_file.info.detector_width + pixel]);
+                        }
+                        
+                        printf("...\n");
+                    }
+                } else {
+                    // 1D 數據：width
+                    printf("Retrieved 1D calibration data (%d pixels): ", calibration_size);
+                    for (int i = 0; i < 5 && i < calibration_size; i++) {
+                        printf("%f ", calibration[i]);
+                    }
+                    printf("...\n");
+                }
+                
+                // 記得釋放記憶體
+                free(calibration);
+            } else {
+                printf("No calibration data available\n");
+            }
             
             sif_close(&sif_file);
 
@@ -67,7 +91,7 @@ int main(int argc, char *argv[]) {
     } else {
         printf("Error: Cannot open file %s\n", filename);
     }
-    
+
     return 0;
 }
 
