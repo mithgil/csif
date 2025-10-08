@@ -13,13 +13,9 @@
 #define MAX_CALIBRATION_COEFFS 10
 
 typedef enum {
-    SIF_DATA_UNKNOWN = 0,
-    SIF_DATA_FLOAT32 = 1,
-    SIF_DATA_INT32 = 2,
-    SIF_DATA_INT16 = 3,
-    SIF_DATA_UINT16 = 4
-} SifDataType;
-
+    BYTE_SWAP_DISABLE = 0,
+    BYTE_SWAP_ENABLE = 1,
+} ByteSwapMode;
 
 typedef struct {
     int x0, y0, x1, y1;
@@ -104,7 +100,7 @@ void sif_close(SifFile *sif_file);
 int extract_calibration(const SifInfo *info, double **calibration, int *calib_width, int *calib_frames);
 
 // 数据读取函数
-int sif_load_all_frames(SifFile *sif_file);
+int sif_load_all_frames(SifFile *sif_file, int enable_byte_swap);
 int sif_load_single_frame(SifFile *sif_file, int frame_index);
 int sif_load_frame_range(SifFile *sif_file, int start_frame, int end_frame);
 void sif_unload_data(SifFile *sif_file);

@@ -7,6 +7,8 @@
 // 工具函數宣告
 void trim_trailing_whitespace(char *str);
 void debug_print_some_lines(FILE* fp, long debug_pos, int num_lines);
+void debug_hex_dump(FILE* fp, long debug_pos, int num_bytes_to_dump);
+void debug_comprehensive(FILE* fp, long debug_pos, int num_lines, int hex_dump_bytes);
 
 int32_t read_little_endian_int32(FILE *fp);
 int32_t read_big_endian_int32(FILE *fp);
@@ -14,6 +16,6 @@ void print_sif_first_line(const char *filename);
 void print_sif_first_lines(const char *filename, int line_count);
 void print_sif_info_summary(const SifInfo *info);
 void print_sif_file_structure(const SifFile *sif_file);
-void print_hex_dump(FILE *fp, int offset, int length);
+void print_hex_dump(FILE *fp, int target_offset, int before_bytes, int after_bytes);
 
 #endif

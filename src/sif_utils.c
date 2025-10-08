@@ -39,6 +39,103 @@ void debug_print_some_lines(FILE* fp, long debug_pos, int num_lines){
     printf("  Reset to position: 0x%lX\n", ftell(fp));
 }
 
+void debug_hex_dump(FILE* fp, long debug_pos, int num_bytes_to_dump) {
+    // 保存當前位置
+    long original_pos = ftell(fp);
+    
+    // 移動到指定位置
+    fseek(fp, debug_pos, SEEK_SET);
+    
+    printf("→ Debug Hex Dump starting from position: 0x%lX\n", debug_pos);
+    printf("Bytes to dump: %d\n\n", num_bytes_to_dump);
+    
+    // 讀取數據
+    unsigned char *buffer = (unsigned char*)malloc(num_bytes_to_dump);
+    if (!buffer) {
+        printf("Error: Memory allocation failed for %d bytes\n", num_bytes_to_dump);
+        fseek(fp, original_pos, SEEK_SET);
+        return;
+    }
+    
+    long bytes_read = fread(buffer, 1, num_bytes_to_dump, fp);
+    
+    printf("Bytes actually read: %ld\n\n", bytes_read);
+    printf("Offset  Hex                                               ASCII\n");
+    printf("------  ------------------------------------------------  ----------------\n");
+    
+    // 計算要顯示的行數
+    long lines_to_display = (bytes_read + 15) / 16;
+    
+    for (long i = 0; i < lines_to_display; i++) {
+        long offset = i * 16;
+        long absolute_offset = debug_pos + offset;
+        
+        printf("%06lX  ", absolute_offset);
+        
+        // 顯示十六進制
+        for (int j = 0; j < 16; j++) {
+            if (offset + j < bytes_read) {
+                printf("%02X ", buffer[offset + j]);
+            } else {
+                printf("   ");
+            }
+        }
+        
+        printf(" ");
+        
+        // 顯示 ASCII
+        for (int j = 0; j < 16 && offset + j < bytes_read; j++) {
+            unsigned char c = buffer[offset + j];
+            if (isprint(c)) {
+                printf("%c", c);
+            } else {
+                printf(".");
+            }
+        }
+        
+        printf("\n");
+        
+        // 標記特殊位置
+        if (offset == 0) {
+            printf("       ^-- Start of dump (position 0x%lX)\n", debug_pos);
+        }
+        
+        // 標記浮點數數據模式
+        if (offset + 4 <= bytes_read) {
+            // 檢查是否可能是浮點數數據 (常見的 0x44 模式)
+            if (buffer[offset + 2] == 0x1C && buffer[offset + 3] == 0x44) {
+                printf("       ^-- Possible float data pattern: 1C 44\n");
+            }
+        }
+    }
+    
+    // 顯示統計資訊
+    printf("\n=== Debug Hex Dump Summary ===\n");
+    printf("Start position: 0x%lX\n", debug_pos);
+    printf("Bytes requested: %d\n", num_bytes_to_dump);
+    printf("Bytes displayed: %ld\n", bytes_read);
+    printf("End position: 0x%lX\n", debug_pos + bytes_read);
+    
+    // 清理並恢復位置
+    free(buffer);
+    fseek(fp, original_pos, SEEK_SET);
+    printf("Reset to original position: 0x%lX\n", original_pos);
+}
+
+// 結合兩者的多功能調試函數
+void debug_comprehensive(FILE* fp, long debug_pos, int num_lines, int hex_dump_bytes) {
+    printf("=== Comprehensive Debug Analysis ===\n");
+    printf("Starting from position: 0x%lX\n\n", debug_pos);
+    
+    // 1. 先顯示文字行
+    debug_print_some_lines(fp, debug_pos, num_lines);
+    
+    printf("\n");
+    
+    // 2. 再顯示十六進制 dump
+    debug_hex_dump(fp, debug_pos, hex_dump_bytes);
+}
+
 // 輔助函數：從文件流中讀取一個 4-byte (32-bit) 小端序整數
 // 返回值：成功讀取的整數值；失敗則返回 -1
 int32_t read_little_endian_int32(FILE *fp) {
@@ -181,6 +278,8 @@ void print_sif_info_summary(const SifInfo *info) {
     printf("SIF File Information Summary:\n");
     printf("=============================\n");
     printf("Detector Type: %s\n", info->detector_type);
+    printf("Experiment Time: %d\n", info->experiment_time);
+    printf("Detector Temperature: %.2f °C\n", info->detector_temperature);
     printf("Original Filename: %s\n", info->original_filename);
     printf("Spectrograph: %s\n", info->spectrograph);
     printf("SIF Version: %d\n", info->sif_version);
@@ -191,7 +290,7 @@ void print_sif_info_summary(const SifInfo *info) {
     printf("Number of Subimages: %d\n", info->number_of_subimages);
     printf("Exposure Time: %.6f s\n", info->exposure_time);
     printf("Cycle Time: %.6f s\n", info->cycle_time);
-    printf("Detector Temperature: %.2f °C\n", info->detector_temperature);
+
     if (info->detector_temperature <= -998.0f) {
         printf(" [SENSOR OFFLINE]");
     }
@@ -256,30 +355,51 @@ void print_sif_file_structure(const SifFile *sif_file) {
     }
 }
 
-// 打印十六進制轉儲
-void print_hex_dump(FILE *fp, int offset, int length) {
+// 打印十六進制轉儲（支持從指定位置之前開始）
+void print_hex_dump(FILE *fp, int target_offset, int before_bytes, int after_bytes) {
     if (!fp) return;
     
-    fseek(fp, offset, SEEK_SET);
+    // 計算實際開始位置
+    int start_offset = target_offset - before_bytes;
+    if (start_offset < 0) start_offset = 0;
+    
+    int total_length = before_bytes + after_bytes;
+    
+    fseek(fp, start_offset, SEEK_SET);
     
     unsigned char buffer[16];
     int bytes_read;
     int total_bytes = 0;
     
-    printf("Hex Dump (offset 0x%08X, length %d):\n", offset, length);
+    printf("Hex Dump (offset 0x%08X, showing %d bytes before and %d bytes after):\n", 
+           target_offset, before_bytes, after_bytes);
     printf("Offset    Hex Content                     ASCII\n");
     printf("--------  ------------------------------  ----------------\n");
     
-    while (total_bytes < length && 
+    while (total_bytes < total_length && 
            (bytes_read = fread(buffer, 1, 16, fp)) > 0) {
         
+        int current_offset = start_offset + total_bytes;
+        
         // 顯示偏移量
-        printf("%08X  ", offset + total_bytes);
+        printf("%08X  ", current_offset);
+        
+        // 標記目標位置
+        if (current_offset <= target_offset && (current_offset + bytes_read) > target_offset) {
+            printf(">");
+        } else {
+            printf(" ");
+        }
         
         // 顯示十六進制
         for (int i = 0; i < 16; i++) {
             if (i < bytes_read) {
-                printf("%02X ", buffer[i]);
+                // 標記目標位置的字節
+                if (current_offset + i == target_offset) {
+                    printf("[%02X]", buffer[i]);
+                } else {
+                    printf("%02X ", buffer[i]);
+                }
             } else {
                 printf("   ");
             }
@@ -291,16 +411,24 @@ void print_hex_dump(FILE *fp, int offset, int length) {
         
         // 顯示 ASCII
         for (int i = 0; i < bytes_read; i++) {
+            if (current_offset + i == target_offset) {
+                printf("["); // 開始標記
+            }
+            
             if (isprint(buffer[i])) {
                 printf("%c", buffer[i]);
             } else {
                 printf(".");
+            }
+            
+            if (current_offset + i == target_offset) {
+                printf("]"); // 結束標記
             }
         }
         
         printf("\n");
         
         total_bytes += bytes_read;
-        if (total_bytes >= length) break;
+        if (total_bytes >= total_length) break;
     }
 }

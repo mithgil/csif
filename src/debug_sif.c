@@ -395,7 +395,7 @@ int main(int argc, char *argv[]) {
             
             // 5. 顯示數據區域（可選）
             printf("=== Data Region Preview ===\n");
-            print_hex_dump(fp, sif_file.info.data_offset, 128);
+            print_hex_dump(fp, sif_file.info.data_offset, 0,128);
             
             sif_close(&sif_file);
         } else {

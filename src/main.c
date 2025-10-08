@@ -22,6 +22,7 @@ int main(int argc, char *argv[]) {
     printf("\n");
        
     // 2. 完整解析並顯示資訊
+    
     printf("3. Complete File Analysis:\n");
     FILE *fp = fopen(filename, "rb");
     if (fp) {
@@ -38,32 +39,24 @@ int main(int argc, char *argv[]) {
             sif_file.tiles[0].width, 
             sif_file.tiles[0].height);
     
-            // 方法1：加载所有帧
-            // 加载所有帧数据
-            if (sif_load_all_frames(&sif_file) == 0) {
-                // 方法1：直接訪問
+            //sif_load_all_frames(SifFile *sif_file, int byte_swap)
+            if (sif_load_all_frames(&sif_file, 0) ==  0) {
                 float *frame0 = sif_get_frame_data(&sif_file, 0);
                 if (frame0) {
-                    printf("Frame 0, pixel (0,0): %f\n", frame0[0]);
-                    printf("Frame 0, pixel (1,0): %f\n", frame0[sif_file.tiles[0].width]);
-                }
-                
-                // 方法2：安全訪問單個像素
-                float pixel_value = sif_get_pixel_value(&sif_file, 0, 1, 0);
-                printf("Frame 0, pixel (1,0) via function: %f\n", pixel_value);
-                
-                // 方法3：複製到用戶緩衝區
-                int frame_size = sif_file.tiles[0].width * sif_file.tiles[0].height;
-                float *user_buffer = malloc(frame_size * sizeof(float));
-                if (user_buffer && sif_copy_frame_data(&sif_file, 0, user_buffer) == 0) {
-                    printf("Frame copied to user buffer, first pixel: %f\n", user_buffer[0]);
-                    free(user_buffer);
+                    printf("Final result - Frame 0 first 20 pixels:\n");
+                    for (int i = 0; i < 20; i++) {
+                        printf("  Pixel %d: %.1f\n", i, frame0[i]);
+                    }
+                    
+                    // 檢查數據範圍
+                    float min_val = frame0[0], max_val = frame0[0];
+                    for (int i = 1; i < 1024; i++) {
+                        if (frame0[i] < min_val) min_val = frame0[i];
+                        if (frame0[i] > max_val) max_val = frame0[i];
+                    }
+                    printf("Data range: %.1f to %.1f\n", min_val, max_val);
                 }
             }
-
-            // 3. 顯示數據區域的十六進制轉儲
-            //printf("3. Data Region Hex Dump (first 256 bytes):\n");
-            //print_hex_dump(fp, sif_file.info.data_offset, 256);
             
             sif_close(&sif_file);
 

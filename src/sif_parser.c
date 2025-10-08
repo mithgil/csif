@@ -3,18 +3,18 @@
 #include <ctype.h>
 #include <inttypes.h>
 
-// 首先聲明所有 static 輔助函數
+static void swap_float_array_endian(float *data, int count);
 static void extract_text_part_robust(const char *input, char *output, int max_length);
+
 static int read_binary_string(FILE *fp, char *buffer, int max_length, int length);
 static int read_line_with_binary_check(FILE *fp, char *buffer, int max_length);
 static int read_line_directly(FILE *fp, char *buffer, int max_length);
-static void cleanup_sif_info(SifInfo *info);
 
 static void discard_line(FILE *fp);
 static void discard_bytes(FILE *fp, long count);
 
+static void cleanup_sif_info(SifInfo *info);
 
-// 更健壯的文本提取函數
 static void extract_text_part_robust(const char *input, char *output, int max_length) {
     if (!input || !output) return;
     
@@ -298,9 +298,14 @@ int sif_open(FILE *fp, SifFile *sif_file) {
     
     long line3_start = ftell(fp);
     printf("  Line 3 starts at offset: 0x%lX\n", line3_start);
-    
+
     info->sif_version = read_int(fp);
-    discard_bytes(fp, 3); // 3*read_until(fp, ' ')
+    
+    for (int i = 0; i < 3; i++) {
+        int temp = read_int(fp);
+        printf("  Skipped int %d: %d\n", i, temp);
+    }
+
     info->experiment_time = read_int(fp);
     info->detector_temperature = read_float(fp);
     
@@ -543,8 +548,6 @@ int sif_open(FILE *fp, SifFile *sif_file) {
     long after_calib_pos = ftell(fp);
     printf("  Skipped 4 lines position: 0x%lX\n", after_calib_pos);
 
-    debug_print_some_lines(fp, after_calib_pos, 8);
-
     // Frame Axis, Data Type, Image Axis
     printf("→ Reading axes as simple text lines...\n");
 
@@ -589,7 +592,6 @@ int sif_open(FILE *fp, SifFile *sif_file) {
     }
 
     int layout_marker = 0;
-    int x0 = 0, y1 = 0, x1 = 0, y0 = 0;
 
     if (value_count >= 9) {
         layout_marker = values[0];
@@ -611,8 +613,6 @@ int sif_open(FILE *fp, SifFile *sif_file) {
     printf("  %-15s %d\n", "Subimages:", info->number_of_subimages);
     printf("  %-15s %d\n", "Total length:", info->total_length);
     printf("  %-15s %d\n", "Image length:", info->image_length);
-
-    printf("x0 = %d, x1 = %d, y0 = %d, y1 = %d \n", x0, y1, x1, y0);
 
     if (info->number_of_subimages > 0) {
         printf("→ Reading %d subimage(s) for binning information...\n", info->number_of_subimages);
@@ -691,47 +691,69 @@ int sif_open(FILE *fp, SifFile *sif_file) {
     long before_data = ftell(fp);
     info->data_offset = before_data; // 默認數據偏移
 
-    // 檢查是否有額外的標記
-    int data_flag = 0;
-    if (fscanf(fp, "%d", &data_flag) == 1) {
-        printf("  Data flag: %d\n", data_flag);
+    // 使用文字模式檢查
+    //debug_print_some_lines(fp, before_data, 10);
+    // 使用十六進制模式檢查
+    //debug_hex_dump(fp, before_data, 4*1024);
+
+    // 檢查是否有額外的標記，
+    char line[256];
+
+    printf("→ Reading data flag line at position: 0x%lX\n", before_data);
+
+    if (fgets(line, sizeof(line), fp) != NULL) {
+        // 去除換行符
+        line[strcspn(line, "\n")] = '\0';
         
-        if (data_flag == 0) {
-            // 標記為 0，數據在標記之後
-            info->data_offset = ftell(fp);
-            printf("✓ Data starts after flag 0 at offset: 0x%lX\n", info->data_offset);
-        } else if (data_flag == 1 && info->sif_version == 65567) {
-            // SIF 65567 版本的特殊處理
-            printf("  SIF 65567: skipping %d additional lines\n", info->number_of_frames);
-            for (int i = 0; i < info->number_of_frames; i++) {
-                discard_line(fp);
+        printf("  Raw line content: '%s' (length: %lu)\n", line, strlen(line));
+        
+        // 解析整數
+        int data_flag = 0;
+        if (sscanf(line, "%d", &data_flag) == 1) {
+            printf("  Parsed data flag: %d\n", data_flag);
+            
+            if (data_flag == 0) {
+                info->data_offset = ftell(fp);  // 現在已經在下一行開頭
+                printf("✓ Data starts after flag 0 at offset: 0x%lX\n", info->data_offset);
+            } else if (data_flag == 1 && info->sif_version == 65567) {
+                printf("  SIF 65567: skipping %d additional lines\n", info->number_of_frames);
+                for (int i = 0; i < info->number_of_frames; i++) {
+                    if (fgets(line, sizeof(line), fp) == NULL) break;
+                    printf("    Skipped line %d: '%s'\n", i, line);
+                }
+                info->data_offset = ftell(fp);
+                printf("✓ Data starts after version-specific data at offset: 0x%lX\n", info->data_offset);
+            } else {
+                // 其他情況，回到標記前
+                fseek(fp, before_data, SEEK_SET);
+                printf("✓ Data starts at original offset: 0x%lX\n", info->data_offset);
             }
-            info->data_offset = ftell(fp);
-            printf("✓ Data starts after version-specific data at offset: 0x%lX\n", info->data_offset);
         } else {
-            // 其他情況，回到標記前
+            // 解析整數失敗
+            printf("  Failed to parse integer from line\n");
             fseek(fp, before_data, SEEK_SET);
-            printf("✓ Data starts at current offset: 0x%lX\n", info->data_offset);
+            printf("✓ Data starts at original offset: 0x%lX\n", info->data_offset);
         }
     } else {
-        // 沒有標記，使用當前位置
+        // 讀取行失敗
+        printf("  Failed to read line\n");
         fseek(fp, before_data, SEEK_SET);
-        printf("✓ Data starts at offset: 0x%lX\n", info->data_offset);
+        printf("✓ Data starts at original offset: 0x%lX\n", info->data_offset);
     }
-    
-    // 初始化 SifFile 結構
+        
+
     printf("→ Initializing SifFile structure and tiles...\n");
 
     sif_file->frame_count = info->number_of_frames;
     sif_file->tile_count = info->number_of_frames;
-
+    
     // 分配和初始化 tiles
     if (sif_file->tile_count > 0) {
         sif_file->tiles = malloc(sif_file->tile_count * sizeof(ImageTile));
         if (sif_file->tiles) {
             // 計算每個幀的數據大小（width*height*no_subimages*4）
             int pixels_per_frame = info->image_width * info->image_height * info->number_of_subimages;
-            int bytes_per_pixel = 4; // 32-bit float ('F;32F')
+            int bytes_per_pixel = 4; // 32-bit float 
             
             printf("  Tile configuration:\n");
             printf("    Pixels per frame: %d\n", pixels_per_frame);
@@ -860,16 +882,23 @@ int extract_calibration(const SifInfo *info, double **calibration,
     return 0;
 }
 
-// 加载所有帧数据
-// sif_parser.c - 使用方案1
+// 專門的字節序交換函數
+static void swap_float_array_endian(float *data, int count) {
+    for (int i = 0; i < count; i++) {
+        uint32_t temp;
+        memcpy(&temp, &data[i], sizeof(uint32_t));
+        temp = ((temp & 0xFF) << 24) | ((temp & 0xFF00) << 8) |
+               ((temp & 0xFF0000) >> 8) | ((temp & 0xFF000000) >> 24);
+        memcpy(&data[i], &temp, sizeof(float));
+    }
+}
 
-// 加載所有幀數據
-int sif_load_all_frames(SifFile *sif_file) {
+// 修正的數據加載函數，帶字節序交換控制
+int sif_load_all_frames(SifFile *sif_file, int enable_byte_swap) {
     if (!sif_file || !sif_file->file_ptr || sif_file->frame_count == 0) {
         return -1;
     }
     
-    // 如果已經加載，先清理
     if (sif_file->data_loaded) {
         sif_unload_data(sif_file);
     }
@@ -877,33 +906,70 @@ int sif_load_all_frames(SifFile *sif_file) {
     int frame_size = sif_file->tiles[0].width * sif_file->tiles[0].height;
     int total_pixels = sif_file->frame_count * frame_size;
     
-    // 單次分配所有記憶體
+    printf("→ Loading frame data%s:\n", enable_byte_swap ? " with endian correction" : "");
+    printf("  Frame size: %d x %d = %d pixels\n", 
+           sif_file->tiles[0].width, sif_file->tiles[0].height, frame_size);
+    printf("  Byte swap: %s\n", enable_byte_swap ? "ENABLED" : "DISABLED");
+    
+    // 分配記憶體
     sif_file->frame_data = malloc(total_pixels * sizeof(float));
     if (!sif_file->frame_data) {
-        printf("❌ Failed to allocate memory for frame data: %d pixels\n", total_pixels);
+        printf("❌ Failed to allocate memory\n");
         return -1;
     }
     
     FILE *fp = sif_file->file_ptr;
     
-    // 連續讀取所有幀數據
+    // 直接讀取所有數據
     for (int i = 0; i < sif_file->frame_count; i++) {
-        fseek(fp, sif_file->tiles[i].offset, SEEK_SET);
+        long offset = sif_file->tiles[i].offset;
+        fseek(fp, offset, SEEK_SET);
         
-        // 直接讀取到連續記憶體位置
         float *frame_start = sif_file->frame_data + i * frame_size;
         size_t read_count = fread(frame_start, sizeof(float), frame_size, fp);
         
         if (read_count != frame_size) {
-            printf("⚠️ Warning: Only read %zu of %d pixels for frame %d\n", 
-                   read_count, frame_size, i);
-            // 可以選擇在這裡失敗或繼續
+            printf("⚠️ Frame %d: Only read %zu/%d pixels\n", i, read_count, frame_size);
+        }
+        
+        // 根據參數決定是否進行字節序交換
+        if (enable_byte_swap) {
+            swap_float_array_endian(frame_start, frame_size);
+        }
+        
+        // 調試第一幀
+        if (i == 0) {
+            printf("  Frame 0%s:\n", enable_byte_swap ? " after byte swap" : " (raw)");
+            
+            // 重新讀取原始字節來對比
+            fseek(fp, offset, SEEK_SET);
+            unsigned char raw_bytes[40];
+            fread(raw_bytes, 1, 40, fp);
+            
+            printf("    Original bytes -> Values:\n");
+            for (int j = 0; j < 10 && j < frame_size; j++) {
+                printf("    Pixel %d: %02X %02X %02X %02X -> %.1f\n",
+                       j, raw_bytes[j*4], raw_bytes[j*4+1], 
+                       raw_bytes[j*4+2], raw_bytes[j*4+3], frame_start[j]);
+            }
+            
+            // 檢查是否有合理的值
+            int valid_count = 0;
+            for (int j = 0; j < frame_size; j++) {
+                if (frame_start[j] > 600.0f && frame_start[j] < 700.0f) {
+                    valid_count++;
+                    if (valid_count <= 3) {
+                        printf("    Valid value at pixel %d: %.1f\n", j, frame_start[j]);
+                    }
+                }
+            }
+            printf("    Total valid values (600-700 range): %d/%d\n", valid_count, frame_size);
         }
     }
     
     sif_file->data_loaded = 1;
-    printf("✓ Loaded %d frames (%d pixels total) into contiguous memory\n", 
-           sif_file->frame_count, total_pixels);
+    printf("✓ Loaded %d frames%s\n", sif_file->frame_count, 
+           enable_byte_swap ? " with endian correction" : "");
     return 0;
 }
 
@@ -953,7 +1019,6 @@ int sif_copy_frame_data(SifFile *sif_file, int frame_index, float *output_buffer
     return 0;
 }
 
-// 釋放數據
 void sif_unload_data(SifFile *sif_file) {
     if (!sif_file) return;
     
@@ -964,7 +1029,6 @@ void sif_unload_data(SifFile *sif_file) {
     sif_file->data_loaded = 0;
 }
 
-// 專門清理 SifInfo 的函數
 static void cleanup_sif_info(SifInfo *info) {
     if (!info) return;
     
@@ -978,7 +1042,6 @@ static void cleanup_sif_info(SifInfo *info) {
         info->calibration_data = NULL;
     }
 }
-// 关闭文件并释放所有资源
 void sif_close(SifFile *sif_file) {
     if (!sif_file) return;
     
