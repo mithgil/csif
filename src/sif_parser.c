@@ -3,7 +3,6 @@
 #include <ctype.h>
 #include <inttypes.h>
 
-// 移除 static，現在是全局變數（外部鏈接）
 SifVerboseLevel current_verbose_level = SIF_NORMAL;
 
 void sif_set_verbose_level(SifVerboseLevel level) {
@@ -38,12 +37,12 @@ static void extract_text_part_robust(const char *input, char *output, int max_le
     int out_index = 0;
     int found_text = 0;
     
-    // 跳過前導空格
+    // skip prior spaces
     while (input[i] != '\0' && isspace((unsigned char)input[i])) {
         i++;
     }
     
-    // 複製字母字符直到遇到數字
+    // copy char until number is met
     while (input[i] != '\0' && out_index < max_length - 1) {
         unsigned char c = input[i];
         
@@ -51,11 +50,11 @@ static void extract_text_part_robust(const char *input, char *output, int max_le
             output[out_index++] = c;
             found_text = 1;
         } else if (isdigit(c)) {
-            // 遇到數字，如果已經找到文本就停止
+            // number met, and stop
             if (found_text) break;
-            // 如果還沒找到文本，繼續（跳過前導數字）
+            // if text is not yet found, continue skipping preceding numbers
         } else {
-            // 其他字符（標點等），如果已經找到文本就停止
+            // other chars (commas), if they are met and stop
             if (found_text) break;
         }
         i++;
@@ -64,7 +63,7 @@ static void extract_text_part_robust(const char *input, char *output, int max_le
     output[out_index] = '\0';
     trim_trailing_whitespace(output);
     
-    // 如果提取失敗，使用默認值
+    // if retrieving fails, defaults to 
     if (strlen(output) == 0) {
         if (strstr(input, "Wavelength") != NULL) {
             strcpy(output, "Wavelength");
@@ -76,7 +75,7 @@ static void extract_text_part_robust(const char *input, char *output, int max_le
     }
 }
 
-// 直接讀取一行（用於當長度前綴解析失敗時）
+// read line
 static int read_line_directly(FILE *fp, char *buffer, int max_length) {
     long start_pos = ftell(fp);
     printf("  Falling back to direct line reading at offset: 0x%lX\n", start_pos);
@@ -117,38 +116,6 @@ static int read_line_directly(FILE *fp, char *buffer, int max_length) {
     return i;
 }
 
-
-static int read_python_style_string(FILE *fp, char *buffer, int max_length) {
-    // 1. 讀取一行作為長度
-    char length_line[32];
-    if (fgets(length_line, sizeof(length_line), fp) == NULL) {
-        return -1;
-    }
-    trim_trailing_whitespace(length_line);
-    
-    int length = atoi(length_line);
-    printf("  String length from file: %d (line: '%s')\n", length, length_line);
-    
-    // 2. 檢查緩衝區大小
-    if (length <= 0 || length >= max_length) {
-        printf("  Invalid length: %d (max: %d)\n", length, max_length);
-        return -1;
-    }
-    
-    // 3. 讀取指定長度的字符串
-    size_t bytes_read = fread(buffer, 1, length, fp);
-    if (bytes_read != length) {
-        printf("  Failed to read string: expected %d bytes, got %zu\n", length, bytes_read);
-        return -1;
-    }
-    
-    buffer[length] = '\0';
-    printf("  Read string: '%s'\n", buffer);
-    
-    return length;
-}
-
-// 輔助函數實現
 static int read_binary_string(FILE *fp, char *buffer, int max_length, int length) {
     if (length <= 0 || length >= max_length) {
         return -1;
@@ -182,9 +149,9 @@ static int read_line_with_binary_check(FILE *fp, char *buffer, int max_length) {
         if (c == EOF) break;
         if (c == '\n') break;
         
-        // 檢查是否遇到二進制數據（非可打印字符）
+        // check if binary data is met
         if (c < 32 && c != '\t' && c != '\r') {
-            // 遇到二進制數據，回退並停止讀取
+            // move back and stop reading
             fseek(fp, -1, SEEK_CUR);
             break;
         }
@@ -196,8 +163,7 @@ static int read_line_with_binary_check(FILE *fp, char *buffer, int max_length) {
     return i;
 }
 
-
-// 讀取直到終止符 (模擬 Python 的 _read_until)
+// read until terminator
 int read_until(FILE *fp, char *buffer, int max_length, char terminator) {
     int i = 0;
     char c;
@@ -208,12 +174,12 @@ int read_until(FILE *fp, char *buffer, int max_length, char terminator) {
             return -1; // EOF
         }
         
-        // 遇到終止符或換行符
+        // encounter terminator/ newline
         if (c == terminator || c == '\n') {
-            if (i > 0) break; // 讀到有效數據後遇到終止符，停止
-            // 如果是空格或換行符，且還沒讀到有效數據，則繼續 (模擬 Python 的 while len(word) > 0)
+            if (i > 0) break; // stop reading until terminator is met
+            // if space / change line and no effective data, and then continue
             if (c != '\n') continue;
-            else break; // 換行符通常是行的結束，即使word為空也停止
+            else break; // newline is the end of a line, stops even word is empty
         }
         
         buffer[i++] = c;
@@ -221,12 +187,12 @@ int read_until(FILE *fp, char *buffer, int max_length, char terminator) {
     
     buffer[i] = '\0';
     
-    // 如果因為換行符停止，需要確保不丟失它
+    // if stops due to newline, make sure not to lose it.
     if (c == '\n' && i == 0) {
-        // 這是個空行，或者我們剛好在行首，確保指標在換行符之後
-        if (ftell(fp) > start_pos + 1) fseek(fp, -1, SEEK_CUR); // 如果讀了字節，回退
+        //this is empty line, ore we are at the leading char of a line, make sure pointer is afterward the newline
+        if (ftell(fp) > start_pos + 1) fseek(fp, -1, SEEK_CUR); // move back if byte is read
     } else if (c != terminator && c != '\n') {
-        // 如果不是因為終止符停止（而是因為緩衝區滿或EOF），回退一個字節以讓下一個讀取函數處理終止符
+        // if stop not due to the terminator (EOF or buffer overflow), go back 1 byte and let the next function take care terminator
         if (ftell(fp) > start_pos) fseek(fp, -1, SEEK_CUR);
     }
 
@@ -249,7 +215,7 @@ double read_float(FILE *fp) {
     return atof(buffer);
 }
 
-// 跳過空格和換行符 
+// skip space and Newline 
 void skip_spaces(FILE *fp) {
     char c;
     long offset;
@@ -259,26 +225,24 @@ void skip_spaces(FILE *fp) {
         if (fread(&c, 1, 1, fp) != 1) break;
         
         if (c != ' ' && c != '\n' && c != '\r') {
-            fseek(fp, offset, SEEK_SET); // 回到非空白字符處
+            fseek(fp, offset, SEEK_SET); // go back to nonempty site
             break;
         }
     }
 }
 
-// 讀取並丟棄一行
 static void discard_line(FILE *fp) {
     char buffer[MAX_STRING_LENGTH];
     if (fgets(buffer, MAX_STRING_LENGTH, fp) == NULL) {
-        // 遇到 EOF
+        // if reaches EOF, noithing
     }
 }
 
-// 讀取固定長度的原始數據並丟棄
 static void discard_bytes(FILE *fp, long count) {
     fseek(fp, count, SEEK_CUR);
 }
 
-// 主要解析函數
+// main parsing function
 int sif_open(FILE *fp, SifFile *sif_file) {
 
     if (!fp || !sif_file) return -1;
@@ -328,7 +292,7 @@ int sif_open(FILE *fp, SifFile *sif_file) {
     info->experiment_time = read_int(fp);
     info->detector_temperature = read_float(fp);
     
-    discard_bytes(fp, 10); // 跳過 10 bytes 的 padding
+    discard_bytes(fp, 10); // Skip 10-byte padding
     
     read_int(fp); // skip 0
     info->exposure_time = read_float(fp);
@@ -349,19 +313,18 @@ int sif_open(FILE *fp, SifFile *sif_file) {
     read_int(fp); // skip 0
     info->gate_width = read_float(fp);
     
-    // 跳過 16 個值
+    // Skip 16 int
     for (int i = 0; i < 16; i++) {
         read_int(fp);
     }
     
     info->grating_blaze = read_float(fp);
     
-    // 讀取 Line 3 剩餘部分直到換行
+    // read Line 3 until change line
     if (fgets(line_buffer, sizeof(line_buffer), fp) == NULL) return -1;
     
     // Line 4: Detector Type
     if (fgets(info->detector_type, sizeof(info->detector_type), fp) == NULL) return -1;
-    //info->detector_type[strcspn(info->detector_type, "\r\n")] = 0;
     trim_trailing_whitespace(info->detector_type);
     PRINT_VERBOSE("✓ Detector Type: '%s'\n", info->detector_type);
 
@@ -370,28 +333,27 @@ int sif_open(FILE *fp, SifFile *sif_file) {
     info->detector_height = read_int(fp);
     PRINT_VERBOSE("✓ Detector Dimensions: %d x %d\n", info->detector_width, info->detector_height);
 
-    // 文件名讀取（修復版本）
+    // documents reading
     PRINT_VERBOSE("→ Reading original filename...\n");
     long before_filename = ftell(fp);
     PRINT_VERBOSE("  Before filename, position: 0x%lX\n", before_filename);
     
-    // 讀取並丟棄第一行（"45"）
+    // read and discard the first line（"45"）
     if (fgets(line_buffer, sizeof(line_buffer), fp) == NULL) return -1;
     line_buffer[strcspn(line_buffer, "\r\n")] = 0;
     PRINT_VERBOSE("  Discarded short line: '%s'\n", line_buffer);
     
-    // 讀取真正的文件名
+    // read the real filenmae
     if (fgets(info->original_filename, sizeof(info->original_filename), fp) == NULL) return -1;
-    //info->original_filename[strcspn(info->original_filename, "\r\n")] = 0;
     trim_trailing_whitespace(info->original_filename);
     PRINT_VERBOSE("✓ Original Filename: '%s'\n", info->original_filename);
     
     PRINT_DEBUG("After original filename parsing, position: 0x%lX\n", ftell(fp));
     
-    // 跳過 20 space 0A newline
+    // skip 20 space 0A newline
     discard_bytes(fp, 2);
 
-    // Line 7: 應該是 "65538 2048"
+    // Line 7: should be "65538 2048"
     int user_text_flag = read_int(fp);
     int user_text_length = read_int(fp);
     PRINT_DEBUG("  User text flag: %d, length: %d\n", user_text_flag, user_text_length);
@@ -399,7 +361,7 @@ int sif_open(FILE *fp, SifFile *sif_file) {
     long current_pos = ftell(fp);
     PRINT_DEBUG("  After Line 7, position: 0x%lX\n", current_pos);
 
-    // 讀取 User Text（如果有的話）
+    // read User Text (if there is)
     if (user_text_length > 0 && user_text_length < sizeof(info->user_text)) {
         if (fread(info->user_text, 1, user_text_length, fp) == user_text_length) {
             info->user_text[user_text_length] = '\0';
@@ -407,14 +369,14 @@ int sif_open(FILE *fp, SifFile *sif_file) {
             PRINT_DEBUG("  User text: %d bytes\n", info->user_text_length);
         }
     }
-    discard_line(fp); // 讀取換行符
+    discard_line(fp); // read change line
 
-    // Line 9: Shutter Time 信息
+    // Line 9: Shutter Time info
     PRINT_VERBOSE("→ Line 9: Reading shutter time...\n");
     long line9_start = ftell(fp);
     PRINT_VERBOSE("  Line 9 starts at offset: 0x%lX\n", line9_start);
 
-    // 讀取標記並驗證
+    // read markers and verify
     int line9_marker = read_int(fp);
     if (line9_marker != 65538) {
         PRINT_VERBOSE("  ⚠️ Unexpected marker in Line 9: %d (expected 65538)\n", line9_marker);
@@ -428,7 +390,7 @@ int sif_open(FILE *fp, SifFile *sif_file) {
     info->shutter_time[0] = read_float(fp);
     info->shutter_time[1] = read_float(fp);
 
-    // 檢查讀取的浮點數是否合理
+    // check if the floating point is valid
     if (isnan(info->shutter_time[0]) || isnan(info->shutter_time[1])) {
         PRINT_DEBUG("  ❌ Failed to read shutter time values\n");
         return -1;
@@ -472,13 +434,13 @@ int sif_open(FILE *fp, SifFile *sif_file) {
         trim_trailing_whitespace(info->spectrograph);
         PRINT_VERBOSE("✓ Spectrograph: '%s'\n", info->spectrograph);
         
-        // Line 19: Intensifier info (跳過)
+        // Line 19: Intensifier info -> skip
         discard_line(fp);
         PRINT_VERBOSE("  Skipped intensifier info line\n");
         
-        // Line 20-22: 讀取 3 個 float (可能是額外參數)
+        // Line 20-22: read 3 float (perhaps extra params)
         for (int i = 0; i < 3; i++) {
-            read_float(fp); // 讀取但暫時不存儲
+            read_float(fp); 
         }
         PRINT_VERBOSE("  Read 3 float parameters\n");
         
@@ -486,22 +448,22 @@ int sif_open(FILE *fp, SifFile *sif_file) {
         info->gate_gain = read_float(fp);
         PRINT_VERBOSE("✓ Gate Gain: %.6f\n", info->gate_gain);
         
-        // Line 24-25: 讀取 2 個 float
+        // Line 24-25: read 2 個 float
         read_float(fp);
         read_float(fp);
         PRINT_VERBOSE("  Read 2 additional float parameters\n");
         
-        // Line 26: Gate Delay (picoseconds 轉 seconds)
+        // Line 26: Gate Delay (picoseconds to seconds)
         float gate_delay_ps = read_float(fp);
         info->gate_delay = gate_delay_ps * 1e-12;
         PRINT_VERBOSE("✓ Gate Delay: %.6f ps (%.2e s)\n", gate_delay_ps, info->gate_delay);
         
-        // Line 27: Gate Width (picoseconds 轉 seconds)  
+        // Line 27: Gate Width (picoseconds to seconds)  
         float gate_width_ps = read_float(fp);
         info->gate_width = gate_width_ps * 1e-12;
         PRINT_VERBOSE("✓ Gate Width: %.6f ps (%.2e s)\n", gate_width_ps, info->gate_width);
         
-        // Line 28-35: 跳過 8 行
+        // Line 28-35: skip 8 lines
         for (int i = 0; i < 8; i++) {
             discard_line(fp);
         }
@@ -524,12 +486,12 @@ int sif_open(FILE *fp, SifFile *sif_file) {
     char calib_line[MAX_STRING_LENGTH];
     if (fgets(calib_line, sizeof(calib_line), fp) == NULL) {
         PRINT_DEBUG("  Warning: Failed to read calibration data line\n");
-        info->calibration_data[0] = '\0'; // 設為空字串
+        info->calibration_data[0] = '\0'; // set to be an empty string
     } else {
         trim_trailing_whitespace(calib_line);
         PRINT_VERBOSE("✓ Calibration Data: %s\n", calib_line);
         
-        // 正確複製字串到結構體
+        // correct copy to struct
         strncpy(info->calibration_data, calib_line, sizeof(info->calibration_data) - 1);
         info->calibration_data[sizeof(info->calibration_data) - 1] = '\0';
     }
@@ -545,11 +507,11 @@ int sif_open(FILE *fp, SifFile *sif_file) {
     char raman_line[MAX_STRING_LENGTH];
     if (fgets(raman_line, sizeof(raman_line), fp) == NULL) return -1;
 
-    // 直接使用 fgets 讀取的行，strtod 會自動處理換行符
+    // direct use the line that fgets read, strtod will automatically deal with the Newline
     char *endptr;
     double raman_value = strtod(raman_line, &endptr);
 
-    // 檢查是否成功解析了整行（除了換行符）
+    //check if line parsing is succesful except for Newline
     if (endptr != raman_line) {
         info->raman_ex_wavelength = raman_value;
         PRINT_VERBOSE("✓ Raman Excitation Wavelength: %.2f nm\n", info->raman_ex_wavelength);
@@ -569,7 +531,6 @@ int sif_open(FILE *fp, SifFile *sif_file) {
     // Frame Axis, Data Type, Image Axis
     PRINT_VERBOSE("→ Reading axes as simple text lines...\n");
 
-    // 讀取原始行
     if (fgets(info->frame_axis, sizeof(info->frame_axis), fp) == NULL) return -1;
     trim_trailing_whitespace(info->frame_axis);
     PRINT_VERBOSE("  Raw Frame Axis: '%s'\n", info->frame_axis);
@@ -582,23 +543,23 @@ int sif_open(FILE *fp, SifFile *sif_file) {
     trim_trailing_whitespace(info->image_axis);
     PRINT_VERBOSE("  Raw Image Axis: '%s'\n", info->image_axis);
 
-    // 提取純文本部分 
+    // Extract the plain text content
     extract_text_part_robust(info->frame_axis, info->frame_axis, sizeof(info->frame_axis)); 
     extract_text_part_robust(info->data_type, info->data_type, sizeof(info->data_type));  
 
-    // 保存純文字部分到臨時變數
+    // keep the text as a temporary variable, temp
     char temp[MAX_STRING_LENGTH];
     extract_text_part_robust(info->image_axis, temp, sizeof(temp));
     PRINT_VERBOSE("  Text part: '%s'\n", temp);
 
-    // 但保留原始字符串用於解析數字
+    // keep number from the temp 
     char *number_part = info->image_axis + strlen(temp);
     PRINT_VERBOSE("  Number part: '%s'\n", number_part);
 
     PRINT_VERBOSE("✓ Frame Axis: '%s'\n", info->frame_axis);
     PRINT_VERBOSE("✓ Data Type: '%s'\n", info->data_type);
 
-    // 解析數字
+    // number parsing
     char *token = strtok(number_part, " ");
     int values[9];
     int value_count = 0;
@@ -614,7 +575,6 @@ int sif_open(FILE *fp, SifFile *sif_file) {
     if (value_count >= 9) {
         layout_marker = values[0];
 
-        // 設置數值到結構體
         info->number_of_frames = values[5];
         info->number_of_subimages = values[6];
         info->total_length = values[7];
@@ -643,24 +603,24 @@ int sif_open(FILE *fp, SifFile *sif_file) {
             int sub_marker = read_int(fp);
             PRINT_DEBUG("  Subimage %d marker: %d\n", i, sub_marker);
             
-            // 讀取子圖像區域和 binning
+            // read suimage and binning
             sub->x0 = read_int(fp);
             sub->y1 = read_int(fp);
             sub->x1 = read_int(fp);
             sub->y0 = read_int(fp);
-            sub->ybin = read_int(fp);  // ← 這裡獲取 ybin
-            sub->xbin = read_int(fp);  // ← 這裡獲取 xbin
+            sub->ybin = read_int(fp);  
+            sub->xbin = read_int(fp);  
             
             PRINT_DEBUG("    Area: (%d,%d)-(%d,%d), Binning: %dx%d\n",
                 sub->x0, sub->y0, sub->x1, sub->y1, sub->xbin, sub->ybin);
             
-            // 計算子圖像尺寸
+            // calculate the subimage size
             sub->width = (1 + sub->x1 - sub->x0) / sub->xbin;
             sub->height = (1 + sub->y1 - sub->y0) / sub->ybin;
             
             PRINT_DEBUG("    Size: %dx%d\n", sub->width, sub->height);
             
-            // 設置全局 binning（通常所有子圖像的 binning 相同）
+            // set the global scope binning 
             if (i == 0) {
                 info->xbin = sub->xbin;
                 info->ybin = sub->ybin;
@@ -681,7 +641,7 @@ int sif_open(FILE *fp, SifFile *sif_file) {
     discard_line(fp);
     PRINT_DEBUG("  After skipping a line, position: 0x%lX\n", ftell(fp));
 
-    // 讀取時間戳
+    // read timestamps
     if (info->number_of_frames > 0) {
         info->timestamps = malloc(info->number_of_frames * sizeof(int64_t));
         if (!info->timestamps) {
@@ -705,31 +665,26 @@ int sif_open(FILE *fp, SifFile *sif_file) {
     PRINT_VERBOSE("→ Determining data offset...\n");
 
     long before_data = ftell(fp);
-    info->data_offset = before_data; // 默認數據偏移
+    info->data_offset = before_data; // default data offset
 
-    // 使用文字模式檢查
-    //debug_print_some_lines(fp, before_data, 10);
-    // 使用十六進制模式檢查
-    //debug_hex_dump(fp, before_data, 4*1024);
-
-    // 檢查是否有額外的標記，
+    // check extra flags or not
     char line[256];
 
     PRINT_DEBUG("→ Reading data flag line at position: 0x%lX\n", before_data);
 
     if (fgets(line, sizeof(line), fp) != NULL) {
-        // 去除換行符
+        // kill NewLine
         line[strcspn(line, "\n")] = '\0';
         
         PRINT_VERBOSE("  Raw line content: '%s' (length: %lu)\n", line, strlen(line));
         
-        // 解析整數
+        // int parsing
         int data_flag = 0;
         if (sscanf(line, "%d", &data_flag) == 1) {
             PRINT_VERBOSE("  Parsed data flag: %d\n", data_flag);
             
             if (data_flag == 0) {
-                info->data_offset = ftell(fp);  // 現在已經在下一行開頭
+                info->data_offset = ftell(fp);  // now moves to the first char of the line
                 PRINT_DEBUG("✓ Data starts after flag 0 at offset: 0x%lX\n", info->data_offset);
             } else if (data_flag == 1 && info->sif_version == 65567) {
                 PRINT_DEBUG("  SIF 65567: skipping %d additional lines\n", info->number_of_frames);
@@ -740,34 +695,32 @@ int sif_open(FILE *fp, SifFile *sif_file) {
                 info->data_offset = ftell(fp);
                 PRINT_DEBUG("✓ Data starts after version-specific data at offset: 0x%lX\n", info->data_offset);
             } else {
-                // 其他情況，回到標記前
+                // other condition, go back to the original position
                 fseek(fp, before_data, SEEK_SET);
                 PRINT_DEBUG("✓ Data starts at original offset: 0x%lX\n", info->data_offset);
             }
         } else {
-            // 解析整數失敗
+            // int parsing fails
             PRINT_DEBUG("  Failed to parse integer from line\n");
             fseek(fp, before_data, SEEK_SET);
             PRINT_DEBUG("✓ Data starts at original offset: 0x%lX\n", info->data_offset);
         }
     } else {
-        // 讀取行失敗
         PRINT_DEBUG("  Failed to read line\n");
         fseek(fp, before_data, SEEK_SET);
         PRINT_DEBUG("✓ Data starts at original offset: 0x%lX\n", info->data_offset);
     }
         
-
     PRINT_VERBOSE("→ Initializing SifFile structure and tiles...\n");
 
     sif_file->frame_count = info->number_of_frames;
     sif_file->tile_count = info->number_of_frames;
     
-    // 分配和初始化 tiles
+    // allocate and initiate tiles
     if (sif_file->tile_count > 0) {
         sif_file->tiles = malloc(sif_file->tile_count * sizeof(ImageTile));
         if (sif_file->tiles) {
-            // 計算每個幀的數據大小（width*height*no_subimages*4）
+            // compute the size of each frame（width*height*no_subimages*4）
             int pixels_per_frame = info->image_width * info->image_height * info->number_of_subimages;
             int bytes_per_pixel = 4; // 32-bit float 
             
@@ -793,22 +746,20 @@ int sif_open(FILE *fp, SifFile *sif_file) {
         }
     }
 
-    // 在 sif_open 中，呼叫 extract_user_text 之前：
     PRINT_VERBOSE("  Before extract_user_text:\n");
     PRINT_VERBOSE("    user_text pointer: %p\n", info->user_text);
     PRINT_VERBOSE("    user_text[0]: 0x%02X\n", (unsigned char)info->user_text[0]);
     PRINT_VERBOSE("    strlen(user_text): %lu\n", strlen(info->user_text));
     PRINT_VERBOSE("    user_text_length: %d\n", info->user_text_length);
 
-    // 手動檢查前幾個字節
+    // manual check the first 10 bytes
     PRINT_VERBOSE("    First 10 bytes: ");
     for (int i = 0; i < 10 && i < user_text_length; i++) {
         PRINT_VERBOSE("%02X ", (unsigned char)info->user_text[i]);
     }
     PRINT_VERBOSE("\n");
 
-
-    // 清理和提取 user_text 中的校準數據
+    // clean and retriecve the calibration data
     extract_user_text(info);
 
     PRINT_VERBOSE("✓ SIF file parsing successfully");
@@ -824,7 +775,7 @@ void extract_frame_calibrations(SifInfo *info, int start_pos) {
     
     PRINT_VERBOSE("→ Extracting frame calibration data from position %d\n", start_pos);
     
-    // 複製 user_text 到可修改的緩衝區
+    // copy user_text to a mutable buffer
     char* text_copy = malloc(info->user_text_length + 1);
     if (!text_copy) {
         printf("  Memory allocation failed\n");
@@ -835,23 +786,23 @@ void extract_frame_calibrations(SifInfo *info, int start_pos) {
     
     char* current_pos = text_copy + start_pos;
     
-    // 為每個 frame 提取校準數據
+    // retrieving data for each frame
     for (int frame = 1; frame <= info->number_of_frames; frame++) {
-        // 構建目標關鍵字 "Calibration data for frame X"
+        // construct the key char "Calibration data for frame X"
         char target[64];
         snprintf(target, sizeof(target), "Calibration data for frame %d", frame);
         
-        // 尋找這個 frame 的校準數據
+        // search for this target
         char* frame_start = strstr(current_pos, target);
         if (!frame_start) {
             printf("  ✗ Calibration data for frame %d not found\n", frame);
             continue;
         }
         
-        // 移動到數據部分（跳過關鍵字和冒號）
+        //move to the data part (skipping key words and :)
         char* data_start = frame_start + strlen(target);
         
-        // 跳過空白和冒號
+        // skip space and :
         while (*data_start && (isspace((unsigned char)*data_start) || *data_start == ':')) {
             data_start++;
         }
@@ -861,13 +812,13 @@ void extract_frame_calibrations(SifInfo *info, int start_pos) {
             continue;
         }
         
-        // 找到行尾或數據結束
+        // find the end of line and data close
         char* data_end = data_start;
         while (*data_end && *data_end != '\n' && *data_end != '\r') {
             data_end++;
         }
         
-        // 提取數據字串
+        // retrieve the data
         size_t data_len = data_end - data_start;
         char data_str[256];
         if (data_len >= sizeof(data_str)) {
@@ -878,17 +829,16 @@ void extract_frame_calibrations(SifInfo *info, int start_pos) {
         
         PRINT_VERBOSE("  Frame %d calibration data: '%s'\n", frame, data_str);
         
-        // 解析係數（逗號分隔）
+        // paring coefficients
         parse_frame_calibration_coefficients(info, frame, data_str);
         
-        // 移動到下一個位置
+        // move to the next position
         current_pos = data_end;
     }
     
     free(text_copy);
     info->has_frame_calibrations = 1;
 }
-
 
 void parse_frame_calibration_coefficients(SifInfo *info, int frame, const char* data_str) {
     if (!info || !data_str) {
@@ -898,7 +848,7 @@ void parse_frame_calibration_coefficients(SifInfo *info, int frame, const char* 
     
     PRINT_VERBOSE("    Parsing coefficients for frame %d: '%s'\n", frame, data_str);
     
-    // 複製字串以便修改（使用 strtok 會修改原字串）
+    // copy string for modification (strtok will modify the original string)
     char* data_copy = strdup(data_str);
     if (!data_copy) {
         PRINT_VERBOSE("    Memory allocation failed for frame %d\n", frame);
@@ -908,9 +858,9 @@ void parse_frame_calibration_coefficients(SifInfo *info, int frame, const char* 
     char* token;
     char* rest = data_copy;
     int coeff_count = 0;
-    double coefficients[20]; // 假設最多20個係數
+    double coefficients[20]; // assume 20 to the most
     
-    // 去除前後空白
+    // trim the leading and trailling whitespace
     char* trimmed = rest;
     while (isspace((unsigned char)*trimmed)) trimmed++;
     char* end = trimmed + strlen(trimmed) - 1;
@@ -919,7 +869,7 @@ void parse_frame_calibration_coefficients(SifInfo *info, int frame, const char* 
     
     rest = trimmed;
     
-    // 使用逗號分割（對應 Julia 的 split(..., ',')）
+    // split by ',' 
     while ((token = strtok_r(rest, ",", &rest))) {
         if (coeff_count < 20) {
             // 去除 token 的空白
@@ -933,7 +883,7 @@ void parse_frame_calibration_coefficients(SifInfo *info, int frame, const char* 
                 char* endptr;
                 double value = strtod(token_trim, &endptr);
                 
-                if (endptr != token_trim) { // 成功轉換
+                if (endptr != token_trim) { // successfully conversion
                     coefficients[coeff_count++] = value;
                     PRINT_VERBOSE("      Coefficient %d: %f\n", coeff_count, value);
                 } else {
@@ -943,7 +893,7 @@ void parse_frame_calibration_coefficients(SifInfo *info, int frame, const char* 
         }
     }
     
-    // 保存係數到 info 結構
+    // save coefficients 
     if (coeff_count > 0) {
         // 確保不會超出陣列範圍
         if (frame <= MAX_FRAMES) {
@@ -1017,13 +967,12 @@ int extract_calibration(const SifInfo *info, double **calibration,
 
 void parse_calibration_coefficients(SifInfo *info) {
     if (!info || info->calibration_data[0] == '\0') {
-        info->calibration_coeff_count = 0;  // 標記為失敗
+        info->calibration_coeff_count = 0;  // marked as 
         return;
     }
     
     PRINT_VERBOSE("→ Parsing calibration coefficients from: '%s'\n", info->calibration_data);
     
-    // 複製字串以便修改
     char* data_copy = strdup(info->calibration_data);
     if (!data_copy) {
         info->calibration_coeff_count = 0;
@@ -1035,7 +984,7 @@ void parse_calibration_coefficients(SifInfo *info) {
     int coeff_count = 0;
     double coefficients[10];
     
-    // 去除前後空白
+    // trim spaces
     char* trimmed = rest;
     while (isspace((unsigned char)*trimmed)) trimmed++;
     char* end = trimmed + strlen(trimmed) - 1;
@@ -1044,17 +993,16 @@ void parse_calibration_coefficients(SifInfo *info) {
     
     rest = trimmed;
     
-    // 使用空白分割
+    // split by spaces
     while ((token = strtok_r(rest, " \t", &rest))) {
         if (coeff_count < 10) {
             char* endptr;
             double value = strtod(token, &endptr);
             
-            if (endptr != token) { // 成功轉換
+            if (endptr != token) { // successful conversion
                 coefficients[coeff_count++] = value;
                 PRINT_VERBOSE("    Coefficient %d: %f\n", coeff_count, value);
             } else {
-                // 解析失敗
                 PRINT_VERBOSE("    Failed to parse '%s' as float\n", token);
                 free(data_copy);
                 info->calibration_coeff_count = 0;
@@ -1066,12 +1014,12 @@ void parse_calibration_coefficients(SifInfo *info) {
     free(data_copy);
     
     if (coeff_count > 0) {
-        // 保存解析後的係數
+        // save coefficients
         info->calibration_coeff_count = coeff_count;
         memcpy(info->calibration_coefficients, coefficients, coeff_count * sizeof(double));
 
     } else {
-        info->calibration_coeff_count = 0; // 失敗
+        info->calibration_coeff_count = 0; // fails
     }
 }
 
@@ -1085,7 +1033,7 @@ void extract_user_text(SifInfo *info) {
     PRINT_VERBOSE("  user_text_length: %d\n", info->user_text_length);
     PRINT_VERBOSE("  calibration_data: '%s'\n", info->calibration_data);
     
-    // 搜尋 "Calibration data for" - 只在 user_text 的前20個字節中搜尋！
+    // search for "Calibration data for" - in the first 20 bytes of user_text
     const char* target = "Calibration data for";
     int found = 0;
     
@@ -1109,14 +1057,14 @@ void extract_user_text(SifInfo *info) {
     if (!found) {
         PRINT_VERBOSE("  ✗ '%s' not found in first %d bytes of user_text\n", target, search_limit);
         
-        // 情況2: 沒有找到目標，處理現有的 calibration_data
+        // processing the present calibration_data
         if (info->calibration_data[0] != '\0') {
             PRINT_VERBOSE("  calibration_data is a string: '%s'\n", info->calibration_data);
             
             // 嘗試解析校準係數
-            parse_calibration_coefficients(info);  // 現在是 void 函數
+            parse_calibration_coefficients(info); 
             
-            // 檢查是否解析成功（通過 calibration_coeff_count）
+            // check if conversion is succesful via calibration_coeff_count
             if (info->calibration_coeff_count > 0) {
                 PRINT_VERBOSE("  ✓ Successfully parsed %d calibration coefficients\n", 
                        info->calibration_coeff_count);
@@ -1136,7 +1084,7 @@ void extract_user_text(SifInfo *info) {
     PRINT_VERBOSE("✓ User text processing completed\n");
 }
 
-// 專門的字節序交換函數
+// bytes swap
 static void swap_float_array_endian(float *data, int count) {
     for (int i = 0; i < count; i++) {
         uint32_t temp;
@@ -1147,7 +1095,7 @@ static void swap_float_array_endian(float *data, int count) {
     }
 }
 
-// 修正的數據加載函數，帶字節序交換控制
+// data loading
 int sif_load_all_frames(SifFile *sif_file, int enable_byte_swap) {
     if (!sif_file || !sif_file->file_ptr || sif_file->frame_count == 0) {
         return -1;
@@ -1165,7 +1113,7 @@ int sif_load_all_frames(SifFile *sif_file, int enable_byte_swap) {
            sif_file->tiles[0].width, sif_file->tiles[0].height, frame_size);
     PRINT_VERBOSE("  Byte swap: %s\n", enable_byte_swap ? "ENABLED" : "DISABLED");
     
-    // 分配記憶體
+    // allocate memory
     sif_file->frame_data = malloc(total_pixels * sizeof(float));
     if (!sif_file->frame_data) {
         printf("❌ Failed to allocate memory\n");
@@ -1174,7 +1122,7 @@ int sif_load_all_frames(SifFile *sif_file, int enable_byte_swap) {
     
     FILE *fp = sif_file->file_ptr;
     
-    // 直接讀取所有數據
+    // direct retrieve all data
     for (int i = 0; i < sif_file->frame_count; i++) {
         long offset = sif_file->tiles[i].offset;
         fseek(fp, offset, SEEK_SET);
@@ -1186,16 +1134,16 @@ int sif_load_all_frames(SifFile *sif_file, int enable_byte_swap) {
             printf("⚠️ Frame %d: Only read %zu/%d pixels\n", i, read_count, frame_size);
         }
         
-        // 根據參數決定是否進行字節序交換
+        // bytes swapping 
         if (enable_byte_swap) {
             swap_float_array_endian(frame_start, frame_size);
         }
         
-        // 調試第一幀
+        // debug the first frame
         if (i == 0) {
             PRINT_VERBOSE("  Frame 0%s:\n", enable_byte_swap ? " after byte swap" : " (raw)");
             
-            // 重新讀取原始字節來對比
+            // re-read original bytes to compare
             fseek(fp, offset, SEEK_SET);
             unsigned char raw_bytes[40];
             fread(raw_bytes, 1, 40, fp);
@@ -1227,7 +1175,6 @@ int sif_load_all_frames(SifFile *sif_file, int enable_byte_swap) {
     return 0;
 }
 
-// 獲取幀數據指針
 float* sif_get_frame_data(SifFile *sif_file, int frame_index) {
     if (!sif_file || !sif_file->frame_data || 
         frame_index < 0 || frame_index >= sif_file->frame_count) {
@@ -1238,7 +1185,6 @@ float* sif_get_frame_data(SifFile *sif_file, int frame_index) {
     return sif_file->frame_data + frame_index * frame_size;
 }
 
-// 獲取像素值
 float sif_get_pixel_value(SifFile *sif_file, int frame_index, int row, int col) {
     if (!sif_file || !sif_file->frame_data) {
         return 0.0f;
@@ -1256,7 +1202,7 @@ float sif_get_pixel_value(SifFile *sif_file, int frame_index, int row, int col) 
     return sif_file->frame_data[pixel_index];
 }
 
-// 複製幀數據到用戶緩衝區
+// copy frame data to buffer of the user
 int sif_copy_frame_data(SifFile *sif_file, int frame_index, float *output_buffer) {
     if (!sif_file || !sif_file->frame_data || !output_buffer) {
         return -1;
@@ -1310,15 +1256,15 @@ void sif_close(SifFile *sif_file) {
         PRINT_VERBOSE("✓ Freed tiles array\n");
     }
     
-    // 清理 info 結構體中的動態內存
+    // clean the dynamic memory of info struct 
     cleanup_sif_info(&sif_file->info);
     
-    // 重置計數器
+    // reset counter
     sif_file->frame_count = 0;
     sif_file->tile_count = 0;
     sif_file->data_loaded = 0;
     
-    // 注意：不關閉 file_ptr，由調用者管理文件指針
+    // note: not close file_ptr，this will be handled by the user in debugging
     sif_file->file_ptr = NULL;
     
     PRINT_VERBOSE("✓ SIF file closed successfully\n");

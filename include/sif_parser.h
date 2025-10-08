@@ -16,15 +16,14 @@
 #define MAX_COEFFICIENTS 20
 
 typedef enum {
-    SIF_SILENT = 0,    // 無輸出（錯誤訊息除外）
-    SIF_QUIET = 1,     // 只顯示最重要結果
-    SIF_NORMAL = 2,    // 顯示基本進度資訊（推薦默認）
-    SIF_VERBOSE = 3,   // 顯示詳細解析過程
-    SIF_DEBUG = 4      // 顯示所有除錯資訊
+    SIF_SILENT = 0,    // No output (except for error messages)
+    SIF_QUIET = 1,     // Only display the most important results
+    SIF_NORMAL = 2,    // Display basic progress information (default)
+    SIF_VERBOSE = 3,   // Display detailed parsing process
+    SIF_DEBUG = 4      // Display all debug info
 } SifVerboseLevel;
 
 extern SifVerboseLevel current_verbose_level;
-
 
 typedef struct {
     int x0, y0, x1, y1;
@@ -108,33 +107,33 @@ typedef struct {
     int tile_count;
     SifInfo info;
     
-    // 数据存储
+    // data storage
     float *frame_data;            // 1D：frame_data[frame * height * width + row * width + col]
     int data_loaded;              // mark for data to be loaded
     
-    FILE *file_ptr;               // 文件指针（用于延迟加载）
-    const char *filename;         // 文件名（用于重新打开文件）
+    FILE *file_ptr;               // File pointer (used for lazy loading)
+    const char *filename;         // File name (used to reopen the file)
     
 } SifFile;
 
-// 主要函數
+// main functions
 int sif_open(FILE *fp, SifFile *sif_file);
 void sif_close(SifFile *sif_file);
 int extract_calibration(const SifInfo *info, double **calibration, int *calib_width, int *calib_frames);
 
-// 数据读取函数
+// Data reading function
 int sif_load_all_frames(SifFile *sif_file, int enable_byte_swap);
 int sif_load_single_frame(SifFile *sif_file, int frame_index);
 int sif_load_frame_range(SifFile *sif_file, int start_frame, int end_frame);
 void sif_unload_data(SifFile *sif_file);
 
-// 数据访问函数
+//  Data access function
 float *sif_get_frame_data(SifFile *sif_file, int frame_index);
 int sif_save_frame_as_text(SifFile *sif_file, int frame_index, const char *filename);
 float sif_get_pixel_value(SifFile *sif_file, int frame_index, int row, int col);
 int sif_copy_frame_data(SifFile *sif_file, int frame_index, float *output_buffer);
 
-// 輔助函數
+// helper functions
 int read_until(FILE *fp, char *buffer, int max_length, char terminator);
 int read_int(FILE *fp);
 double read_float(FILE *fp);
@@ -144,11 +143,11 @@ void extract_frame_calibrations(SifInfo *info, int start_pos);
 void parse_calibration_coefficients(SifInfo *info);
 void parse_frame_calibration_coefficients(SifInfo *info, int frame, const char* data_str);
 
-// 函數聲明
+// function to control verbose level
 void sif_set_verbose_level(SifVerboseLevel level);
 void sif_print(SifVerboseLevel min_level, const char* format, ...);
 
-// 快捷宏（在頭文件中定義）
+// Convenience macro (defined in header file)
 #define PRINT_SILENT(...)   sif_print(SIF_SILENT, __VA_ARGS__)
 #define PRINT_NORMAL(...)   sif_print(SIF_NORMAL, __VA_ARGS__)
 #define PRINT_VERBOSE(...)  sif_print(SIF_VERBOSE, __VA_ARGS__)

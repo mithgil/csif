@@ -3,9 +3,6 @@
 #include "sif_parser.h"
 #include "sif_utils.h"
 
-//  ./bin/read_sif /home/tim/Documents/AS/data/andor/20250917/1OD_500uW_sapphire_200umFiber_.sif
-//  ./bin/read_sif /home/tim/Documents/AS/data/andor/20250908/monochrom_430_700_10_LED_2.sif
-
 int main(int argc, char *argv[]) {
     if (argc < 2) {
         fprintf(stderr, "Usage: %s <filename> [options]\n", argv[0]);
