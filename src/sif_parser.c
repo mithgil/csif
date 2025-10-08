@@ -438,7 +438,7 @@ int sif_open(FILE *fp, SifFile *sif_file) {
         discard_line(fp);
         PRINT_VERBOSE("  Skipped intensifier info line\n");
         
-        // Line 20-22: read 3 float (perhaps extra params)
+        // Line 20-22: read 3 floats (perhaps extra params)
         for (int i = 0; i < 3; i++) {
             read_float(fp); 
         }
@@ -448,7 +448,7 @@ int sif_open(FILE *fp, SifFile *sif_file) {
         info->gate_gain = read_float(fp);
         PRINT_VERBOSE("✓ Gate Gain: %.6f\n", info->gate_gain);
         
-        // Line 24-25: read 2 個 float
+        // Line 24-25: read 2 floats
         read_float(fp);
         read_float(fp);
         PRINT_VERBOSE("  Read 2 additional float parameters\n");
