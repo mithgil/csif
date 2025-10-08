@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <stdarg.h>
 
 #define SIF_MAGIC "Andor Technology Multi-Channel File\n"
 #define MAX_STRING_LENGTH 1024
@@ -15,9 +16,12 @@
 #define MAX_COEFFICIENTS 20
 
 typedef enum {
-    BYTE_SWAP_DISABLE = 0,
-    BYTE_SWAP_ENABLE = 1,
-} ByteSwapMode;
+    SIF_SILENT = 0,     // 完全靜默，只返回錯誤碼
+    SIF_QUIET = 1,      // 只顯示重要結果
+    SIF_NORMAL = 2,     // 顯示基本進度資訊
+    SIF_VERBOSE = 3,    // 顯示詳細解析過程
+    SIF_DEBUG = 4       // 顯示所有除錯資訊
+} SifVerboseLevel;
 
 typedef struct {
     int x0, y0, x1, y1;
@@ -32,6 +36,9 @@ typedef struct {
 } FrameCalibration;
 
 typedef struct {
+
+    SifVerboseLevel verbose_level;
+
     char detector_type[MAX_STRING_LENGTH];
     char original_filename[MAX_STRING_LENGTH];
     char spectrograph[MAX_STRING_LENGTH];
@@ -99,8 +106,8 @@ typedef struct {
     SifInfo info;
     
     // 数据存储
-    float *frame_data;            // 一維數組：frame_data[frame * height * width + row * width + col]
-    int data_loaded;              // 标记数据是否已加载
+    float *frame_data;            // 1D：frame_data[frame * height * width + row * width + col]
+    int data_loaded;              // mark for data to be loaded
     
     FILE *file_ptr;               // 文件指针（用于延迟加载）
     const char *filename;         // 文件名（用于重新打开文件）
@@ -133,5 +140,15 @@ void extract_user_text(SifInfo *info);
 void extract_frame_calibrations(SifInfo *info, int start_pos);
 void parse_calibration_coefficients(SifInfo *info);
 void parse_frame_calibration_coefficients(SifInfo *info, int frame, const char* data_str);
+
+// 函數聲明
+void sif_set_verbose_level(SifVerboseLevel level);
+void sif_print(SifVerboseLevel min_level, const char* format, ...);
+
+// 快捷宏（在頭文件中定義）
+#define PRINT_SILENT(...)   sif_print(SIF_SILENT, __VA_ARGS__)
+#define PRINT_NORMAL(...)   sif_print(SIF_NORMAL, __VA_ARGS__)
+#define PRINT_VERBOSE(...)  sif_print(SIF_VERBOSE, __VA_ARGS__)
+#define PRINT_DEBUG(...)    sif_print(SIF_DEBUG, __VA_ARGS__)
 
 #endif
