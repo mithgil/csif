@@ -12,6 +12,7 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 add_library(sif_parser_obj OBJECT 
     src/sif_parser.c 
     src/sif_utils.c
+    src/sif_json.c
 )
 
 set_target_properties(sif_parser_obj PROPERTIES
@@ -34,6 +35,9 @@ target_link_libraries(debug_sif PRIVATE sif_parser_obj m)
 
 add_executable(debug_detail_sif src/debug_detail.c)
 target_link_libraries(debug_detail_sif PRIVATE sif_parser_obj m)
+
+add_executable(sif_json src/sif_cli_json.c)
+target_link_libraries(sif_json PRIVATE sif_parser_obj m)
 
 # 共享庫
 add_library(sif_parser_shared SHARED $<TARGET_OBJECTS:sif_parser_obj>)
@@ -71,6 +75,7 @@ install(TARGETS sif_parser_shared sif_parser_static
 install(FILES 
     include/sif_parser.h
     include/sif_utils.h
+    include/sif_json.h
     DESTINATION include
 )
 

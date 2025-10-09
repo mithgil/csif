@@ -1193,6 +1193,61 @@ int sif_load_all_frames(SifFile *sif_file, int enable_byte_swap) {
     return 0;
 }
 
+int sif_load_single_frame(SifFile *sif_file, int frame_index) {
+    if (!sif_file || !sif_file->file_ptr || sif_file->frame_count == 0) {
+        return -1;
+    }
+    
+    if (frame_index < 0 || frame_index >= sif_file->frame_count) {
+        printf("❌ Frame index %d out of range (0-%d)\n", 
+               frame_index, sif_file->frame_count - 1);
+        return -1;
+    }
+    
+    // 如果已經加載了數據，先釋放
+    if (sif_file->data_loaded) {
+        sif_unload_data(sif_file);
+    }
+    
+    int frame_size = sif_file->tiles[0].width * sif_file->tiles[0].height;
+    int total_pixels = frame_size;  // 只加載一幀
+    
+    PRINT_VERBOSE("→ Loading single frame %d:\n", frame_index);
+    PRINT_VERBOSE("  Frame size: %d x %d = %d pixels\n", 
+           sif_file->tiles[0].width, sif_file->tiles[0].height, frame_size);
+    
+    // 分配記憶體
+    sif_file->frame_data = malloc(total_pixels * sizeof(float));
+    if (!sif_file->frame_data) {
+        printf("❌ Failed to allocate memory for frame %d\n", frame_index);
+        return -1;
+    }
+    
+    FILE *fp = sif_file->file_ptr;
+    
+    // 讀取指定幀的數據
+    long offset = sif_file->tiles[frame_index].offset;
+    fseek(fp, offset, SEEK_SET);
+    
+    size_t read_count = fread(sif_file->frame_data, sizeof(float), frame_size, fp);
+    
+    if (read_count != frame_size) {
+        printf("⚠️ Frame %d: Only read %zu/%d pixels\n", frame_index, read_count, frame_size);
+        free(sif_file->frame_data);
+        sif_file->frame_data = NULL;
+        return -1;
+    }
+    
+    // 字節序交換（如果需要）
+    // 注意：這裡假設不需要字節序交換，因為通常 SIF 文件是小端序
+    // 如果需要，可以添加 enable_byte_swap 參數
+    
+    PRINT_VERBOSE("✓ Loaded frame %d (%d pixels)\n", frame_index, frame_size);
+    
+    sif_file->data_loaded = 1;
+    return 0;
+}
+
 float* sif_get_frame_data(SifFile *sif_file, int frame_index) {
     if (!sif_file || !sif_file->frame_data || 
         frame_index < 0 || frame_index >= sif_file->frame_count) {
