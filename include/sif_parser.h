@@ -15,7 +15,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
- 
+
 #ifndef SIF_PARSER_H
 #define SIF_PARSER_H
 
@@ -48,7 +48,6 @@ typedef struct {
     int xbin, ybin;
     int width, height;
 } SubImageInfo;
-
 
 typedef struct {
     double coefficients[MAX_COEFFICIENTS];
@@ -102,7 +101,6 @@ typedef struct {
     int has_frame_calibrations;    
     FrameCalibration frame_calibrations[MAX_FRAMES];
     
-
     SubImageInfo *subimages;
     int64_t *timestamps;
     
