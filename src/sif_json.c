@@ -4,12 +4,15 @@
 #include <string.h>
 #include <math.h>
 
+// 統一的選項定義
 const JsonOutputOptions JSON_DEFAULT_OPTIONS = {
     .include_raw_data = 1,
     .include_calibration = 1,
     .include_metadata = 1,
     .pretty_print = 0,
-    .max_data_points = 0
+    .max_data_points = 0,
+    .include_all_frames = 1,    // 包含所有幀
+    .max_frames = 1000          // 最大1000幀
 };
 
 const JsonOutputOptions JSON_METADATA_ONLY_OPTIONS = {
@@ -17,7 +20,9 @@ const JsonOutputOptions JSON_METADATA_ONLY_OPTIONS = {
     .include_calibration = 1,
     .include_metadata = 1,
     .pretty_print = 0,
-    .max_data_points = 0
+    .max_data_points = 0,
+    .include_all_frames = 0,    // 不包含幀數據
+    .max_frames = 0
 };
 
 const JsonOutputOptions JSON_FULL_DATA_OPTIONS = {
@@ -25,7 +30,9 @@ const JsonOutputOptions JSON_FULL_DATA_OPTIONS = {
     .include_calibration = 1,
     .include_metadata = 1,
     .pretty_print = 1,
-    .max_data_points = 0
+    .max_data_points = 0,
+    .include_all_frames = 1,    // 包含所有幀
+    .max_frames = 1000
 };
 
 // JSON 緩衝區管理
@@ -223,16 +230,39 @@ char* sif_file_to_json(SifFile *sif_file, JsonOutputOptions options) {
     
     // 原始數據
     if (options.include_raw_data && sif_file->frame_data && sif_file->data_loaded) {
+        // 計算總數據點數
         int total_pixels = sif_file->info.image_width * sif_file->info.image_height;
-        int data_points = total_pixels;
-        if (options.max_data_points > 0 && options.max_data_points < data_points) {
-            data_points = options.max_data_points;
+        int total_frames = sif_file->info.number_of_frames;
+        
+        // 根據選項限制輸出的幀數
+        if (options.max_frames > 0 && options.max_frames < total_frames) {
+            total_frames = options.max_frames;
         }
         
+        // 如果不包含所有幀，只輸出第一幀
+        if (!options.include_all_frames) {
+            total_frames = 1;
+        }
+        
+        int total_data_points = total_frames * total_pixels;
+        
+        // 限制最大數據點數
+        if (options.max_data_points > 0 && options.max_data_points < total_data_points) {
+            total_data_points = options.max_data_points;
+        }
+        
+        //printf("Debug: Outputting %d data points (%d frames)\n", total_data_points, total_frames);
+        
         json_buffer_append(&buffer, "\"data\": [");
-        for (int i = 0; i < data_points; i++) {
-            json_buffer_append(&buffer, "%.6f", sif_file->frame_data[i]);
-            if (i < data_points - 1) {
+        for (int i = 0; i < total_data_points; i++) {
+            // 確保不超出實際數據範圍
+            if (i < sif_file->info.number_of_frames * total_pixels) {
+                json_buffer_append(&buffer, "%.6f", sif_file->frame_data[i]);
+            } else {
+                json_buffer_append(&buffer, "0.0");
+            }
+            
+            if (i < total_data_points - 1) {
                 json_buffer_append(&buffer, ", ");
                 if (options.pretty_print && (i + 1) % 10 == 0) {
                     json_buffer_append(&buffer, "\n    ");

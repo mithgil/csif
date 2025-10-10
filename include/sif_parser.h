@@ -33,6 +33,7 @@
 #define MAX_FRAMES 100
 #define MAX_COEFFICIENTS 20
 
+
 typedef enum {
     SIF_SILENT = 0,    // No output (except for error messages)
     SIF_QUIET = 1,     // Only display the most important results

@@ -1,3 +1,4 @@
+// sif_json_cli.c
 #include "sif_parser.h"
 #include "sif_json.h"
 #include <stdio.h>
@@ -17,7 +18,7 @@ int main(int argc, char *argv[]) {
     
     SifFile sif_file = {0};
     
-    // 設置為靜默模式，不輸出調試信息
+    // 設置為靜默模式
     sif_set_verbose_level(SIF_SILENT);
     
     if (sif_open(fp, &sif_file) != 0) {
@@ -26,23 +27,25 @@ int main(int argc, char *argv[]) {
         return 1;
     }
     
-    // 使用現有的 sif_load_all_frames 函數
+    // 加載所有幀數據
     if (sif_load_all_frames(&sif_file, 0) != 0) {
-        // 即使加載失敗，我們仍然可以輸出元數據
-        // 不輸出警告到 stdout，只輸出到 stderr
-        fprintf(stderr, "Warning: Could not load frame data\n");
+        // 即使加載失敗，也輸出 JSON（但數據為空）
+        // 不輸出警告到 stdout
     }
     
-    // 輸出 JSON
+    // 輸出 JSON - 不包含任何調試信息
     JsonOutputOptions options = JSON_DEFAULT_OPTIONS;
-    options.pretty_print = 0;  // 壓縮格式，適合程序讀取
+    options.include_all_frames = 1;  // 包含所有幀
+    options.max_frames = 10000;      // 設置足夠大的值
     
     char *json = sif_file_to_json(&sif_file, options);
     if (json) {
-        // 只輸出純 JSON，沒有其他信息
+        // 只輸出純 JSON，沒有任何其他輸出
         printf("%s\n", json);
+        fflush(stdout);  // 確保輸出
         free(json);
     } else {
+        // 錯誤信息輸出到 stderr，不污染 stdout
         fprintf(stderr, "Error: Failed to generate JSON\n");
     }
     

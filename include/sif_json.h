@@ -14,6 +14,8 @@ typedef struct {
     int include_metadata;      // 是否包含元數據
     int pretty_print;          // 是否美化輸出（換行和縮進）
     int max_data_points;       // 最大數據點數（0表示全部）
+    int include_all_frames;    // 是否包含所有幀數據
+    int max_frames;            // 最大輸出幀數
 } JsonOutputOptions;
 
 // 默認選項
