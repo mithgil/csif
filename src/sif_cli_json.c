@@ -17,14 +17,19 @@ int main(int argc, char *argv[]) {
     
     SifFile sif_file = {0};
     
+    // 設置為靜默模式，不輸出調試信息
+    sif_set_verbose_level(SIF_SILENT);
+    
     if (sif_open(fp, &sif_file) != 0) {
         fprintf(stderr, "Error: Failed to parse SIF file\n");
         fclose(fp);
         return 1;
     }
     
-    // 加載第一幀數據
-    if (sif_load_single_frame(&sif_file, 0) != 0) {
+    // 使用現有的 sif_load_all_frames 函數
+    if (sif_load_all_frames(&sif_file, 0) != 0) {
+        // 即使加載失敗，我們仍然可以輸出元數據
+        // 不輸出警告到 stdout，只輸出到 stderr
         fprintf(stderr, "Warning: Could not load frame data\n");
     }
     
@@ -34,6 +39,7 @@ int main(int argc, char *argv[]) {
     
     char *json = sif_file_to_json(&sif_file, options);
     if (json) {
+        // 只輸出純 JSON，沒有其他信息
         printf("%s\n", json);
         free(json);
     } else {
