@@ -3,7 +3,7 @@
 #include "sif_json.h"
 #include <stdio.h>
 #include <stdlib.h>
-// sif_cli_json.c
+
 int main(int argc, char *argv[]) {
     if (argc < 2) {
         fprintf(stderr, "Usage: %s <sif_file> [frame_number]\n", argv[0]);
@@ -33,12 +33,10 @@ int main(int argc, char *argv[]) {
     JsonOutputOptions options = JSON_DEFAULT_OPTIONS;
     
     if (requested_frame >= 0) {
-        // 加載單一幀
-        //printf("Debug: Loading single frame %d\n", requested_frame);
+        // 加載單一幀 - 移除調試輸出
         options.include_all_frames = 0;
         options.max_frames = 1;
         
-        // 使用正確的函數名和參數
         if (sif_load_single_frame(&sif_file, requested_frame) != 0) {
             fprintf(stderr, "Error: Failed to load frame %d\n", requested_frame);
             sif_close(&sif_file);
@@ -46,17 +44,18 @@ int main(int argc, char *argv[]) {
             return 1;
         }
     } else {
-        // 加載所有幀
-        printf("Debug: Loading all %d frames\n", sif_file.info.number_of_frames);
+        // 加載所有幀 - 移除調試輸出
         options.include_all_frames = 1;
         
         if (sif_load_all_frames(&sif_file, 0) != 0) {
+            // 錯誤信息只輸出到 stderr
             fprintf(stderr, "Warning: Could not load all frame data\n");
         }
     }
     
     char *json = sif_file_to_json(&sif_file, options);
     if (json) {
+        // 只輸出純 JSON，沒有任何其他輸出
         printf("%s", json);
         fflush(stdout);
         free(json);
