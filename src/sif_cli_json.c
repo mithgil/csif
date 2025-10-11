@@ -3,11 +3,16 @@
 #include "sif_json.h"
 #include <stdio.h>
 #include <stdlib.h>
-
+// sif_cli_json.c
 int main(int argc, char *argv[]) {
-    if (argc != 2) {
-        fprintf(stderr, "Usage: %s <sif_file>\n", argv[0]);
+    if (argc < 2) {
+        fprintf(stderr, "Usage: %s <sif_file> [frame_number]\n", argv[0]);
         return 1;
+    }
+    
+    int requested_frame = -1; // -1 表示所有幀
+    if (argc == 3) {
+        requested_frame = atoi(argv[2]);
     }
     
     FILE *fp = fopen(argv[1], "rb");
@@ -17,8 +22,6 @@ int main(int argc, char *argv[]) {
     }
     
     SifFile sif_file = {0};
-    
-    // 設置為靜默模式
     sif_set_verbose_level(SIF_SILENT);
     
     if (sif_open(fp, &sif_file) != 0) {
@@ -27,25 +30,37 @@ int main(int argc, char *argv[]) {
         return 1;
     }
     
-    // 加載所有幀數據
-    if (sif_load_all_frames(&sif_file, 0) != 0) {
-        // 即使加載失敗，也輸出 JSON（但數據為空）
-        // 不輸出警告到 stdout
-    }
-    
-    // 輸出 JSON - 不包含任何調試信息
     JsonOutputOptions options = JSON_DEFAULT_OPTIONS;
-    options.include_all_frames = 1;  // 包含所有幀
-    options.max_frames = 10000;      // 設置足夠大的值
+    
+    if (requested_frame >= 0) {
+        // 加載單一幀
+        //printf("Debug: Loading single frame %d\n", requested_frame);
+        options.include_all_frames = 0;
+        options.max_frames = 1;
+        
+        // 使用正確的函數名和參數
+        if (sif_load_single_frame(&sif_file, requested_frame) != 0) {
+            fprintf(stderr, "Error: Failed to load frame %d\n", requested_frame);
+            sif_close(&sif_file);
+            fclose(fp);
+            return 1;
+        }
+    } else {
+        // 加載所有幀
+        printf("Debug: Loading all %d frames\n", sif_file.info.number_of_frames);
+        options.include_all_frames = 1;
+        
+        if (sif_load_all_frames(&sif_file, 0) != 0) {
+            fprintf(stderr, "Warning: Could not load all frame data\n");
+        }
+    }
     
     char *json = sif_file_to_json(&sif_file, options);
     if (json) {
-        // 只輸出純 JSON，沒有任何其他輸出
-        printf("%s\n", json);
-        fflush(stdout);  // 確保輸出
+        printf("%s", json);
+        fflush(stdout);
         free(json);
     } else {
-        // 錯誤信息輸出到 stderr，不污染 stdout
         fprintf(stderr, "Error: Failed to generate JSON\n");
     }
     

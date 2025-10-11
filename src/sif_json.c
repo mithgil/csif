@@ -233,6 +233,7 @@ char* sif_file_to_json(SifFile *sif_file, JsonOutputOptions options) {
         // 計算總數據點數
         int total_pixels = sif_file->info.image_width * sif_file->info.image_height;
         int total_frames = sif_file->info.number_of_frames;
+        int data_points = total_pixels;
         
         // 根據選項限制輸出的幀數
         if (options.max_frames > 0 && options.max_frames < total_frames) {
@@ -241,11 +242,18 @@ char* sif_file_to_json(SifFile *sif_file, JsonOutputOptions options) {
         
         // 如果不包含所有幀，只輸出第一幀
         if (!options.include_all_frames) {
-            total_frames = 1;
+            data_points = total_pixels; // 單一幀
+        } else {
+            // 所有幀模式
+            data_points = sif_file->info.number_of_frames * total_pixels;
+            if (options.max_frames > 0 && options.max_frames < sif_file->info.number_of_frames) {
+                data_points = options.max_frames * total_pixels;
+            }
         }
         
         int total_data_points = total_frames * total_pixels;
         
+
         // 限制最大數據點數
         if (options.max_data_points > 0 && options.max_data_points < total_data_points) {
             total_data_points = options.max_data_points;
