@@ -12,7 +12,7 @@ const JsonOutputOptions JSON_DEFAULT_OPTIONS = {
     .pretty_print = 0,
     .max_data_points = 0,
     .include_all_frames = 1,    // 包含所有幀
-    .max_frames = 1000          // 最大1000幀
+    .max_frames = 0         
 };
 
 const JsonOutputOptions JSON_METADATA_ONLY_OPTIONS = {
@@ -32,7 +32,7 @@ const JsonOutputOptions JSON_FULL_DATA_OPTIONS = {
     .pretty_print = 1,
     .max_data_points = 0,
     .include_all_frames = 1,    // 包含所有幀
-    .max_frames = 1000
+    .max_frames = 0
 };
 
 // JSON 緩衝區管理
@@ -238,7 +238,7 @@ char* sif_file_to_json(SifFile *sif_file, JsonOutputOptions options) {
         // 根據選項限制輸出的幀數
         if (options.max_frames > 0 && options.max_frames < total_frames) {
             total_frames = options.max_frames;
-        }
+        } 
         
         // 如果不包含所有幀，只輸出第一幀
         if (!options.include_all_frames) {
@@ -263,9 +263,16 @@ char* sif_file_to_json(SifFile *sif_file, JsonOutputOptions options) {
         
         json_buffer_append(&buffer, "\"data\": [");
         for (int i = 0; i < total_data_points; i++) {
-            // 確保不超出實際數據範圍
+            
+            float value = sif_file->frame_data[i];
+            // print integers
             if (i < sif_file->info.number_of_frames * total_pixels) {
-                json_buffer_append(&buffer, "%.6f", sif_file->frame_data[i]);
+                if (fabsf(value - roundf(value)) < 0.0001f) {
+                    json_buffer_append(&buffer, "%d", (int)roundf(value));
+                } else {
+                    // 對於非整數，使用緊湊格式
+                    json_buffer_append(&buffer, "%.2f", value);
+                }
             } else {
                 json_buffer_append(&buffer, "0.0");
             }

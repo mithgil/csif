@@ -46,6 +46,7 @@ int main(int argc, char *argv[]) {
     } else {
         // 加載所有幀 - 移除調試輸出
         options.include_all_frames = 1;
+        options.max_frames = 0;
         
         if (sif_load_all_frames(&sif_file, 0) != 0) {
             // 錯誤信息只輸出到 stderr
