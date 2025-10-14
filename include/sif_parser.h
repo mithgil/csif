@@ -19,6 +19,10 @@
 #ifndef SIF_PARSER_H
 #define SIF_PARSER_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -169,5 +173,9 @@ void sif_print(SifVerboseLevel min_level, const char* format, ...);
 #define PRINT_NORMAL(...)   sif_print(SIF_NORMAL, __VA_ARGS__)
 #define PRINT_VERBOSE(...)  sif_print(SIF_VERBOSE, __VA_ARGS__)
 #define PRINT_DEBUG(...)    sif_print(SIF_DEBUG, __VA_ARGS__)
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

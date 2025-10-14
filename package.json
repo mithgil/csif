@@ -1,0 +1,32 @@
+{
+  "name": "sif-parser",
+  "version": "1.0.0",
+  "description": "High-performance Node.js addon for parsing Andor SIF spectral files",
+  "main": "index.js",
+  "scripts": {
+    "install": "node-gyp rebuild",
+    "build": "node-gyp rebuild",
+    "clean": "node-gyp clean",
+    "configure": "node-gyp configure",
+    "test": "node test_complete.js",
+    "rebuild": "npm run clean && npm run build"
+  },
+  "keywords": [
+    "sif",
+    "spectral",
+    "andor",
+    "parser",
+    "addon",
+    "native",
+    "spectroscopy"
+  ],
+  "author": "Tim",
+  "license": "MIT",
+  "gypfile": true,
+  "dependencies": {
+    "node-addon-api": "^7.0.0"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}

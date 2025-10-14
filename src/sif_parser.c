@@ -16,6 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+ #define _POSIX_C_SOURCE 200809L  // 啟用 strdup
+
 #include "sif_parser.h"
 #include "sif_utils.h"
 #include <ctype.h>
@@ -1114,6 +1116,99 @@ static void swap_float_array_endian(float *data, int count) {
 }
 
 // data loading
+/*
+int sif_load_all_frames(SifFile *sif_file, int enable_byte_swap) {
+    PRINT_VERBOSE("=== ENTERING sif_load_all_frames ===\n");
+    
+    if (!sif_file) {
+        PRINT_VERBOSE("❌ sif_file is NULL\n");
+        return -1;
+    }
+    if (!sif_file->file_ptr) {
+        PRINT_VERBOSE("❌ sif_file->file_ptr is NULL\n");
+        return -1;
+    }
+    if (sif_file->frame_count == 0) {
+        PRINT_VERBOSE("❌ sif_file->frame_count is 0\n");
+        return -1;
+    }
+    
+    PRINT_VERBOSE("  frame_count: %d\n", sif_file->frame_count);
+    PRINT_VERBOSE("  tiles pointer: %p\n", sif_file->tiles);
+    
+    if (sif_file->tiles) {
+        PRINT_VERBOSE("  tile[0].width: %d, height: %d, offset: 0x%08lX\n", 
+               sif_file->tiles[0].width, sif_file->tiles[0].height, sif_file->tiles[0].offset);
+    }
+    
+    if (sif_file->data_loaded) {
+        PRINT_VERBOSE("→ Unloading previous data\n");
+        sif_unload_data(sif_file);
+    }
+    
+    int frame_size = sif_file->tiles[0].width * sif_file->tiles[0].height;
+    int total_pixels = sif_file->frame_count * frame_size;
+    
+    PRINT_VERBOSE("→ Allocating memory for %d frames, %d pixels each (%d total)\n", 
+           sif_file->frame_count, frame_size, total_pixels);
+    
+    // allocate memory
+    sif_file->frame_data = malloc(total_pixels * sizeof(float));
+    if (!sif_file->frame_data) {
+        PRINT_VERBOSE("❌ Failed to allocate memory for %lu bytes\n", total_pixels * sizeof(float));
+        return -1;
+    }
+    PRINT_VERBOSE("✓ Allocated frame_data at %p\n", sif_file->frame_data);
+    
+    FILE *fp = sif_file->file_ptr;
+    
+    // direct retrieve all data
+    for (int i = 0; i < sif_file->frame_count; i++) {
+        PRINT_VERBOSE("→ Loading frame %d\n", i);
+        
+        if (!sif_file->tiles || i >= sif_file->frame_count) {
+            PRINT_VERBOSE("❌ Invalid tile access at index %d\n", i);
+            break;
+        }
+        
+        long offset = sif_file->tiles[i].offset;
+        PRINT_VERBOSE("  Seeking to offset: 0x%08lX\n", offset);
+        
+        if (fseek(fp, offset, SEEK_SET) != 0) {
+            PRINT_VERBOSE("❌ Failed to seek to offset 0x%08lX\n", offset);
+            continue;
+        }
+        
+        float *frame_start = sif_file->frame_data + i * frame_size;
+        PRINT_VERBOSE("  Frame data starts at %p\n", frame_start);
+        
+        size_t read_count = fread(frame_start, sizeof(float), frame_size, fp);
+        PRINT_VERBOSE("  Read %zu/%d pixels\n", read_count, frame_size);
+        
+        if (read_count != frame_size) {
+            PRINT_VERBOSE("⚠️ Frame %d: Only read %zu/%d pixels\n", i, read_count, frame_size);
+        }
+        
+        // bytes swapping 
+        if (enable_byte_swap) {
+            PRINT_VERBOSE("  Applying byte swap\n");
+            swap_float_array_endian(frame_start, frame_size);
+        }
+        
+        // debug the first frame
+        if (i == 0 && read_count > 0) {
+            PRINT_VERBOSE("  Frame 0 first 5 values: %.1f, %.1f, %.1f, %.1f, %.1f\n",
+                   frame_start[0], frame_start[1], frame_start[2], frame_start[3], frame_start[4]);
+        }
+    }
+    
+    sif_file->data_loaded = 1;
+    PRINT_VERBOSE("✓ Successfully loaded %d frames\n", sif_file->frame_count);
+    PRINT_VERBOSE("=== EXITING sif_load_all_frames ===\n");
+    return 0;
+}
+ */
+
 int sif_load_all_frames(SifFile *sif_file, int enable_byte_swap) {
     if (!sif_file || !sif_file->file_ptr || sif_file->frame_count == 0) {
         return -1;
@@ -1192,6 +1287,7 @@ int sif_load_all_frames(SifFile *sif_file, int enable_byte_swap) {
            enable_byte_swap ? " with endian correction" : "");
     return 0;
 }
+   
 
 int sif_load_single_frame(SifFile *sif_file, int frame_index) {
     if (!sif_file || !sif_file->file_ptr || sif_file->frame_count == 0) {

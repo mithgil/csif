@@ -36,8 +36,8 @@ target_link_libraries(debug_sif PRIVATE sif_parser_obj m)
 add_executable(debug_detail_sif src/debug_detail.c)
 target_link_libraries(debug_detail_sif PRIVATE sif_parser_obj m)
 
-add_executable(sif_json src/sif_cli_json.c)
-target_link_libraries(sif_json PRIVATE sif_parser_obj m)
+#add_executable(sif_json src/sif_cli_json.c)
+#target_link_libraries(sif_json PRIVATE sif_parser_obj m)
 
 # 共享庫
 add_library(sif_parser_shared SHARED $<TARGET_OBJECTS:sif_parser_obj>)
@@ -61,26 +61,28 @@ target_link_libraries(sif_parser INTERFACE
 )
 
 # 安裝規則
-install(TARGETS read_sif
-    RUNTIME DESTINATION bin
-)
+if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
+    install(TARGETS read_sif debug_sif debug_detail_sif
+        RUNTIME DESTINATION bin
+    )
 
-install(TARGETS sif_parser_shared sif_parser_static
-    EXPORT SIFParserTargets
-    LIBRARY DESTINATION lib
-    ARCHIVE DESTINATION lib
-    RUNTIME DESTINATION bin
-)
+    install(TARGETS sif_parser_shared sif_parser_static
+        EXPORT SIFParserTargets
+        LIBRARY DESTINATION lib
+        ARCHIVE DESTINATION lib
+        RUNTIME DESTINATION bin
+    )
 
-install(FILES 
-    include/sif_parser.h
-    include/sif_utils.h
-    include/sif_json.h
-    DESTINATION include
-)
+    install(FILES 
+        include/sif_parser.h
+        include/sif_utils.h
+        include/sif_json.h
+        DESTINATION include
+    )
 
-install(EXPORT SIFParserTargets
-    FILE SIFParserTargets.cmake
-    NAMESPACE SIFParser::
-    DESTINATION lib/cmake/SIFParser
-)
+    install(EXPORT SIFParserTargets
+        FILE SIFParserTargets.cmake
+        NAMESPACE SIFParser::
+        DESTINATION lib/cmake/SIFParser
+    )
+endif()

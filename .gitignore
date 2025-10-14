@@ -1,6 +1,36 @@
+# Node.js 相關
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+.eslintcache
+
+# 編譯文件
 build/
-julia/
-python/
+*.o
+*.a
+*.so
+*.so.*
+*.node
+
+# 二進制可執行文件
+bin/
+debug_*_sif
+read_sif
+sif_json
+
+# Node-gyp
+.gyp/
+.gypi/
+
+# 平台特定
+*.dll
+*.exe
+*.pdb
+*.lib
+*.obj
+*.exp
 
 # 測試相關
 tests/
@@ -10,18 +40,6 @@ test/
 *.test
 .coverage/
 .pytest_cache/
-
-# 編譯文件
-build/
-*.o
-*.a
-*.so
-*.so.*
-
-# 二進制可執行文件
-bin/
-debug_*_sif
-read_sif
 
 # 編輯器文件
 .vscode/
@@ -36,3 +54,6 @@ Thumbs.db
 # 本地配置文件
 local.config
 *.localtests/
+
+# CMake 備份
+build_cmake_backup/

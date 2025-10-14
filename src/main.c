@@ -121,6 +121,17 @@ int main(int argc, char *argv[]) {
             } else {
                 PRINT_NORMAL("No calibration data available\n");
             }
+            // 在函數結尾添加
+            PRINT_VERBOSE("=== sif_open COMPLETED ===\n");
+            PRINT_VERBOSE("  frame_count: %d\n", sif_file.frame_count);
+            PRINT_VERBOSE("  data_loaded: %d\n", sif_file.data_loaded);
+            PRINT_VERBOSE("  frame_data: %p\n", sif_file.frame_data);
+            PRINT_VERBOSE("  tiles: %p\n", sif_file.tiles);
+            if (sif_file.tiles) {
+                PRINT_VERBOSE("  tile[0]: width=%d, height=%d, offset=0x%08lX\n", 
+                    sif_file.tiles[0].width, sif_file.tiles[0].height, sif_file.tiles[0].offset);
+            }
+            
             sif_close(&sif_file);
         } else {
             PRINT_SILENT("Error: Failed to parse SIF file\n");
