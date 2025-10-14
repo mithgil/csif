@@ -57,3 +57,6 @@ local.config
 
 # CMake 備份
 build_cmake_backup/
+
+python/
+julia/

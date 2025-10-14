@@ -2,7 +2,7 @@
 
 A high-performance C library for reading Andor Technology SIF (Multi-Channel File) format files. Provides efficient access to scientific image and spectral data from Andor cameras and spectrographs. 
 
-Node integration is supported now.
+Node.js integration is supported now.
 
 ## Features
 
