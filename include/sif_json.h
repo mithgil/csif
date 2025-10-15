@@ -7,33 +7,33 @@
 extern "C" {
 #endif
 
-// JSON 輸出選項
+// JSON output
 typedef struct {
-    int include_raw_data;      // 是否包含原始像素數據
-    int include_calibration;   // 是否包含校準信息
-    int include_metadata;      // 是否包含元數據
-    int pretty_print;          // 是否美化輸出（換行和縮進）
-    int max_data_points;       // 最大數據點數（0表示全部）
-    int include_all_frames;    // 是否包含所有幀數據
-    int max_frames;            // 最大輸出幀數
+    int include_raw_data;          // if contains raw data 
+    int include_calibration;       // if contains calibration coefficients
+    int include_metadata;          // if contains metadata
+    int pretty_print;              // if pretty print （newline and indent）
+    size_t max_data_points;        // max poiint (0 denotes all)
+    int include_all_frames;        // if includes all frames
+    size_t max_frames;             // max frames
 } JsonOutputOptions;
 
-// 默認選項
+// default options
 extern const JsonOutputOptions JSON_DEFAULT_OPTIONS;
 extern const JsonOutputOptions JSON_METADATA_ONLY_OPTIONS;
 extern const JsonOutputOptions JSON_FULL_DATA_OPTIONS;
 
-// 主要的 JSON 輸出函數
+// main json output functions
 char* sif_file_to_json(SifFile *sif_file, JsonOutputOptions options);
 char* sif_info_to_json(SifInfo *info);
 char* sif_frame_data_to_json(SifFile *sif_file, int frame_index, JsonOutputOptions options);
 
-// 文件輸出函數
+// documents output
 int sif_save_as_json(SifFile *sif_file, const char *filename, JsonOutputOptions options);
 
-// 便利函數
-char* sif_file_to_json_simple(SifFile *sif_file);  // 使用默認選項
-char* sif_file_metadata_to_json(SifFile *sif_file); // 僅元數據
+// convenient functions
+char* sif_file_to_json_simple(SifFile *sif_file);  // use default
+char* sif_file_metadata_to_json(SifFile *sif_file); // only metadata
 
 #ifdef __cplusplus
 }

@@ -21,5 +21,7 @@ function analyzeSifFile(filename) {
     }
 }
 
-// 測試多個文件
-analyzeSifFile('./test_data/1OD_500uW_sapphire_200umFiber_.sif');
+const batchFilename = '/home/tim/Documents/AS/data/andor/20240313 mos2 si/mos2_si_power_1OD_optimized_50px_4.5um_.sif';
+const singleFilename = './test_data/1OD_500uW_sapphire_200umFiber_.sif';
+
+analyzeSifFile(batchFilename);

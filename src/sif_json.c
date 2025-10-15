@@ -4,14 +4,14 @@
 #include <string.h>
 #include <math.h>
 
-// 統一的選項定義
+// unified option
 const JsonOutputOptions JSON_DEFAULT_OPTIONS = {
     .include_raw_data = 1,
     .include_calibration = 1,
     .include_metadata = 1,
     .pretty_print = 0,
     .max_data_points = 0,
-    .include_all_frames = 1,    // 包含所有幀
+    .include_all_frames = 1,    // includes all frame
     .max_frames = 0         
 };
 
@@ -21,7 +21,7 @@ const JsonOutputOptions JSON_METADATA_ONLY_OPTIONS = {
     .include_metadata = 1,
     .pretty_print = 0,
     .max_data_points = 0,
-    .include_all_frames = 0,    // 不包含幀數據
+    .include_all_frames = 0,    // exclues all frame
     .max_frames = 0
 };
 
@@ -31,11 +31,11 @@ const JsonOutputOptions JSON_FULL_DATA_OPTIONS = {
     .include_metadata = 1,
     .pretty_print = 1,
     .max_data_points = 0,
-    .include_all_frames = 1,    // 包含所有幀
+    .include_all_frames = 1,    // includes all frame
     .max_frames = 0
 };
 
-// JSON 緩衝區管理
+// JSON buffer
 typedef struct {
     char *data;
     size_t length;
@@ -94,13 +94,13 @@ static void json_buffer_free(JsonBuffer *buffer) {
 static char* json_escape_string(const char *input) {
     if (!input) return NULL;
     
-    // 計算需要的緩衝區大小
+    // calculate the size for buffer
     size_t len = strlen(input);
     size_t escaped_len = len + 1; // +1 for null terminator
     
     for (size_t i = 0; i < len; i++) {
         if (input[i] == '\\' || input[i] == '\"' || input[i] == '\n' || input[i] == '\r' || input[i] == '\t') {
-            escaped_len++; // 需要轉義的字符
+            escaped_len++; // char for escaping
         }
     }
     
@@ -139,7 +139,7 @@ static char* json_escape_string(const char *input) {
     return escaped;
 }
 
-// 主要的 JSON 輸出函數
+// main json output
 char* sif_file_to_json(SifFile *sif_file, JsonOutputOptions options) {
     printf("=== ENTERING sif_file_to_json ===\n");
     
@@ -165,14 +165,14 @@ char* sif_file_to_json(SifFile *sif_file, JsonOutputOptions options) {
     
     printf("→ Starting JSON generation...\n");
     
-    // 開始 JSON 對象
+    //Begin JSON object
     json_buffer_append(&buffer, "{");
     
     if (options.pretty_print) {
         json_buffer_append(&buffer, "\n  ");
     }
     
-    // 元數據部分
+    // metadata
     if (options.include_metadata) {
         printf("→ Generating metadata...\n");
 
@@ -192,19 +192,19 @@ char* sif_file_to_json(SifFile *sif_file, JsonOutputOptions options) {
         json_buffer_append(&buffer, "\"detectorTemperature\": %.2f,", sif_file->info.detector_temperature);
         if (options.pretty_print) json_buffer_append(&buffer, "\n    ");
         
-        // 轉義相機型號
+        // escape camera name
         char *escaped_camera = json_escape_string(sif_file->info.detector_type);
         json_buffer_append(&buffer, "\"cameraModel\": \"%s\",", escaped_camera ? escaped_camera : "");
         if (escaped_camera) free(escaped_camera);
         if (options.pretty_print) json_buffer_append(&buffer, "\n    ");
         
-        // 轉義原始文件名
+        // escape the raw filename
         char *escaped_filename = json_escape_string(sif_file->info.original_filename);
         json_buffer_append(&buffer, "\"originalFilename\": \"%s\",", escaped_filename ? escaped_filename : "");
         if (escaped_filename) free(escaped_filename);
         if (options.pretty_print) json_buffer_append(&buffer, "\n    ");
         
-        // 轉義數據類型
+        // Escape datatype
         char *escaped_datatype = json_escape_string(sif_file->info.data_type);
         json_buffer_append(&buffer, "\"dataType\": \"%s\"", escaped_datatype ? escaped_datatype : "");
         if (escaped_datatype) free(escaped_datatype);
@@ -214,7 +214,7 @@ char* sif_file_to_json(SifFile *sif_file, JsonOutputOptions options) {
         if (options.pretty_print) json_buffer_append(&buffer, "\n  ");
     }
 
-    // 在校準部分
+    // calibration
     if (options.include_calibration && sif_file->info.calibration_coeff_count > 0) {
         printf("→ Generating calibration...\n");
         json_buffer_append(&buffer, "\"calibration\": {");
@@ -230,7 +230,7 @@ char* sif_file_to_json(SifFile *sif_file, JsonOutputOptions options) {
         json_buffer_append(&buffer, "],");
         if (options.pretty_print) json_buffer_append(&buffer, "\n    ");
         
-        // 轉義 frameAxis
+        // escape frameAxis
         char *escaped_frameaxis = json_escape_string(sif_file->info.frame_axis);
         json_buffer_append(&buffer, "\"frameAxis\": \"%s\"", escaped_frameaxis ? escaped_frameaxis : "");
         if (escaped_frameaxis) free(escaped_frameaxis);
@@ -240,7 +240,7 @@ char* sif_file_to_json(SifFile *sif_file, JsonOutputOptions options) {
         if (options.pretty_print) json_buffer_append(&buffer, "\n  ");
     }
         
-    // 圖像數據
+    // image data
     json_buffer_append(&buffer, "\"dimensions\": {");
     if (options.pretty_print) json_buffer_append(&buffer, "\n    ");
     json_buffer_append(&buffer, "\"width\": %d,", sif_file->info.image_width);
@@ -250,7 +250,7 @@ char* sif_file_to_json(SifFile *sif_file, JsonOutputOptions options) {
     json_buffer_append(&buffer, "},");
     if (options.pretty_print) json_buffer_append(&buffer, "\n  ");
     
-    // 原始數據 
+    // raw data
     printf("→ Generating data array...\n");
     printf("  include_raw_data: %d\n", options.include_raw_data);
     printf("  frame_data exists: %d\n", sif_file->frame_data != NULL);
@@ -259,7 +259,6 @@ char* sif_file_to_json(SifFile *sif_file, JsonOutputOptions options) {
     if (options.include_raw_data && sif_file->frame_data && sif_file->data_loaded) {
         printf("✓ Outputting real data\n");
         
-        // 使用與 main.c 相同的邏輯
         int frame_size = sif_file->info.image_width * sif_file->info.image_height;
         int total_frames = sif_file->info.number_of_frames;
         int total_data_points = total_frames * frame_size;
@@ -268,11 +267,10 @@ char* sif_file_to_json(SifFile *sif_file, JsonOutputOptions options) {
             sif_file->info.image_width, sif_file->info.image_height, frame_size);
         printf("  Total frames: %d, Total data points: %d\n", total_frames, total_data_points);
         
-        // 檢查第一個幀的數據
-        float *frame0 = sif_file->frame_data; // 第一個幀的開始位置
+        float *frame0 = sif_file->frame_data; // the beginning position of the frist frame
         printf("  Frame 0 pointer: %p\n", frame0);
         
-        // 顯示前幾個值用於調試
+        // display the first 10 values
         printf("  First 10 values from frame_data:\n");
         for (int i = 0; i < 10 && i < frame_size; i++) {
             printf("    [%d] = %.1f\n", i, frame0[i]);
@@ -280,16 +278,13 @@ char* sif_file_to_json(SifFile *sif_file, JsonOutputOptions options) {
         
         json_buffer_append(&buffer, "\"data\": [", 9);
         
-        // 輸出數據 - 使用與 main.c 相同的範圍
+        // output data
         int output_points = frame_size;
-        if (output_points > 20) {
-            output_points = 20; // 與 main.c 一樣輸出前20個點
-        }
         
         for (int i = 0; i < output_points; i++) {
             float value = frame0[i];
             
-            // 使用簡單的字符串構建
+            // use char to construct
             char num_str[32];
             if (value == (int)value) {
                 snprintf(num_str, sizeof(num_str), "%d", (int)value);
@@ -312,9 +307,7 @@ char* sif_file_to_json(SifFile *sif_file, JsonOutputOptions options) {
             options.include_raw_data, sif_file->frame_data, sif_file->data_loaded);
         json_buffer_append(&buffer, "\"data\": []", 10);
     }
-
         
-    
     if (options.pretty_print) {
         json_buffer_append(&buffer, "\n");
     }
