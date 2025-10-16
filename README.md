@@ -9,8 +9,9 @@ Node.js integration is supported now.
 - 🚀 **High Performance**: Pure C implementation for fast data loading
 - 📊 **Complete Data Access**: Read image data, calibration coefficients, and metadata
 - 🔧 **Flexible Output Control**: Configurable verbosity levels for different use cases
-- 🎯 **Accurate Parsing**: Handles various SIF file versions and formats
 - 📈 **Calibration Support**: Extracts and processes calibration data for accurate measurements
+- 🌐 Node.js Integration: High-performance Node.js addon for JavaScript applications
+- 📦 Multiple Output Formats: JSON output for web applications and data analysis
 
 ## Project Structure
 
@@ -25,12 +26,17 @@ $ tree . -L 3
 │   ├── lib
 │   │   ├── libsifparser.a      # Static library
 │   │   └── libsifparser.so*    # Shared library
+│   └── Release
+│       └── sifaddon.node       # Node.js addon
 ├── include
 │   ├── sif_parser.h           # Main parsing library
-│   └── sif_utils.h            # Utility functions
+│   ├── sif_utils.h            # Utility functions
+│   └── sif_json.h             # JSON output functions
 └── src
     ├── sif_parser.c           # Core parsing implementation
     ├── sif_utils.c            # Utility implementations
+    ├── sif_json.c             # JSON output implementation
+    ├── binding.cc             # Node.js addon binding
     └── main.c                 # Example usage
 ```
 
@@ -38,6 +44,7 @@ $ tree . -L 3
 
 ### Building the Library
 
+C Library (CMake)
 ```bash
 # Clone and build
 git clone <repository-url>
@@ -45,6 +52,17 @@ cd csif
 mkdir build && cd build
 cmake ..
 make -j4
+```
+
+### Node.js Addon (npm)
+```bash
+# Build Node.js addon
+npm install
+npm run build
+
+# Or manually with node-gyp
+npx node-gyp configure
+npx node-gyp build
 ```
 
 ### Basic Usage
@@ -164,8 +182,70 @@ if (sif_open_file("spectrum.sif", &sif_file) == 0) {
     
     sif_close(&sif_file);
 }
+
 ```
 
+#### JSON Output (C)
+```c
+SifFile sif_file;
+if (sif_open_file("spectrum.sif", &sif_file) == 0) {
+    JsonOutputOptions opts = {
+        .pretty_print = 1,
+        .include_metadata = 1,
+        .include_calibration = 1,
+        .include_raw_data = 1
+    };
+    
+    char* json_str = sif_file_to_json(&sif_file, opts);
+    if (json_str) {
+        printf("JSON Output:\n%s\n", json_str);
+        free(json_str);
+    }
+    
+    sif_close(&sif_file);
+}
+
+```
+
+#### Node.js Integration
+```javascript
+const sifParser = require('./build/Release/sifaddon.node');
+
+class SpectrumAnalyzer {
+    static parseFile(filename) {
+        try {
+            const jsonString = sifParser.sifFileToJson(filename);
+            const data = JSON.parse(jsonString);
+            
+            return {
+                intensities: data.data,
+                wavelengths: this.calculateWavelengths(data),
+                metadata: data.metadata,
+                calibration: data.calibration
+            };
+        } catch (error) {
+            throw new Error(`Failed to parse SIF file: ${error.message}`);
+        }
+    }
+    
+    static calculateWavelengths(data) {
+        if (data.calibration && data.calibration.coefficients) {
+            const coeffs = data.calibration.coefficients;
+            return data.data.map((_, i) => {
+                // Polynomial calibration: λ = c0 + c1*x + c2*x² + c3*x³
+                const x = i;
+                return coeffs[0] + coeffs[1]*x + coeffs[2]*x*x + coeffs[3]*x*x*x;
+            });
+        }
+        return null;
+    }
+}
+
+// Usage
+const spectrum = SpectrumAnalyzer.parseFile('spectrum.sif');
+console.log('Peak intensity:', Math.max(...spectrum.intensities));
+console.log('Data points:', spectrum.intensities.length);
+```
 ### Working with Calibration Data
 
 ```c
@@ -188,6 +268,73 @@ if (calibration) {
 }
 ```
 
+### Javascript Integration by Node Addon
+
+Compiling the c code to a node addon will enable JS applications call c sif parsing with intrinsic C performance
+
+#### Compile with N-API
+
+Remember to have `node-gyp` tool 
+
+```bash
+sudo npm install -g node-gyp
+```
+
+and include `napi` header file in the `binding.cc`, 
+
+```bash
+#if there is 'build' by CMakeLists
+
+mv build build_cmake_backup
+
+mkdir build
+
+npx node-gyp configure
+
+npx node-gyp build
+
+```
+
+finally, your would see a addon appears under the build/Release
+
+If anything changed, then do
+
+```bash
+
+rm -rf build
+
+npx node-gyp clean
+
+npx node-gyp configure
+
+npx node-gyp build
+
+```
+
+#### Load the node addon
+
+First, let your electron app or web app to load this node addon correctly.
+
+Just follow the example of `test_complete.js` as follows
+
+```JS
+//test_complete.js
+const sifParser = require('./build/Release/sifaddon.node');
+
+function analyzeSifFile(filename) {
+    try {
+        const jsonResult = sifParser.sifFileToJson(filename);
+        const data = JSON.parse(jsonResult); 
+        ...
+    }
+}
+...
+// process your data and visulization
+
+```
+
+Have fun!
+
 ## Debug Tools
 
 ### `debug_detail_sif`
@@ -209,15 +356,36 @@ cd build
 sudo make install
 ```
 
-### Using in Your Project
+## Using in Your Project
 
+### CMake Integration
 ```cmake
 # CMakeLists.txt
 find_library(SIFPARSER_LIB sifparser)
 target_link_libraries(your_target ${SIFPARSER_LIB})
 ```
 
-## File Format Support
+### Node.js Integration
+
+```bash
+# Install from local path
+npm install /path/to/csif
+
+# Or link for development
+cd /path/to/csif
+npm link
+cd /path/to/your-project
+npm link sif-parser
+
+```
+
+### Performance Comparison
+
+| Method | Performance | Use Case |
+|--------|-------------|----------|
+| **Node.js Addon** | 🚀 Highest | Electron apps, web services |
+| **C Library** | 🚀 High | Native applications, CLI tools |
+| **CLI + Subprocess** | 🐢 Lower | Legacy integration |
 
 - ✅ Andor SIF format versions including 65567, 65540
 - ✅ Multi-frame data
@@ -225,18 +393,49 @@ target_link_libraries(your_target ${SIFPARSER_LIB})
 - ✅ Subimage and binning information
 - ✅ Timestamp data
 - ✅ User text metadata
+- ✅ JSON output for web applications
 
 ## License
-
-This project is licensed under the GNU General Public License v3.0 - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the GNU General Public License v3.0 - see the LICENSE file for details.
 
 ## Contributing
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+Fork the repository
+
+Create a feature branch (git checkout -b feature/amazing-feature)
+
+Commit your changes (git commit -m 'Add amazing feature')
+
+Push to the branch (git push origin feature/amazing-feature)
+
+Open a Pull Request
+
+## Development
+Building for Development
+```bash
+# C library development
+mkdir build && cd build
+cmake -DCMAKE_BUILD_TYPE=Debug ..
+make
+
+
+# Node.js addon development
+npm run clean && npm run build
+
+# Testing
+npm test
+./bin/read_sif test_data/example.sif
+```
+
+## Project Architecture
+
+- Core Parser (sif_parser.c): Low-level SIF file parsing
+
+- JSON Output (sif_json.c): Structured data serialization
+
+- Node.js Binding (binding.cc): V8/N-API integration
+
+- CLI Tools: Example applications and debugging utilities
 
 ## Citation
 

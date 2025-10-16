@@ -4,7 +4,7 @@ const sifParser = require('./build/Release/sifaddon.node');
 function analyzeSifFile(filename) {
     try {
         const jsonResult = sifParser.sifFileToJson(filename);
-        const data = JSON.parse(jsonResult);
+        const data = JSON.parse(jsonResult); 
         
         console.log('=== SIF File Analysis ===');
         console.log('File:', filename);
@@ -25,3 +25,4 @@ const batchFilename = '/home/tim/Documents/AS/data/andor/20240313 mos2 si/mos2_s
 const singleFilename = './test_data/1OD_500uW_sapphire_200umFiber_.sif';
 
 analyzeSifFile(batchFilename);
+
