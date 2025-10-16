@@ -315,23 +315,7 @@ npx node-gyp build
 
 First, let your electron app or web app to load this node addon correctly.
 
-Just follow the example of `test_complete.js` as follows
-
-```JS
-//test_complete.js
-const sifParser = require('./build/Release/sifaddon.node');
-
-function analyzeSifFile(filename) {
-    try {
-        const jsonResult = sifParser.sifFileToJson(filename);
-        const data = JSON.parse(jsonResult); 
-        ...
-    }
-}
-...
-// process your data and visulization
-
-```
+Just follow the example of `test_complete.js`or the example in the previous section
 
 Have fun!
 
