@@ -297,22 +297,29 @@ char* sif_file_to_json(SifFile *sif_file, JsonOutputOptions options) {
         json_buffer_append(&buffer, "\"data\": [", 9);
         
         // output data
-        int output_points = frame_size;
+        int output_points = total_data_points;
         
-        for (int i = 0; i < output_points; i++) {
-            float value = frame0[i];
+        for (int frame = 0; frame < total_frames; frame++) {
+            // 計算當前幀的起始位置
+            float *current_frame = frame0 + (frame * frame_size);
             
-            // use char to construct
-            char num_str[32];
-            if (value == (int)value) {
-                snprintf(num_str, sizeof(num_str), "%d", (int)value);
-            } else {
-                snprintf(num_str, sizeof(num_str), "%.1f", value);
-            }
-            json_buffer_append(&buffer, num_str, strlen(num_str));
-            
-            if (i < output_points - 1) {
-                json_buffer_append(&buffer, ", ", 2);
+            for (int i = 0; i < frame_size; i++) {
+                float value = current_frame[i];
+                
+                // use char to construct
+                char num_str[32];
+                if (value == (int)value) {
+                    snprintf(num_str, sizeof(num_str), "%d", (int)value);
+                } else {
+                    snprintf(num_str, sizeof(num_str), "%.1f", value);
+                }
+                json_buffer_append(&buffer, num_str, strlen(num_str));
+                
+                // 檢查是否是最後一個元素
+                int current_index = frame * frame_size + i;
+                if (current_index < output_points - 1) {
+                    json_buffer_append(&buffer, ", ", 2);
+                }
             }
         }
         
