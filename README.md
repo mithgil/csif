@@ -270,6 +270,8 @@ if (calibration) {
 
 ### Javascript Integration by Node Addon
 
+Compiling the c code to a node addon will enable JS applications call c sif parsing with intrinsic C performance, but some details need to be considered
+
 Here, I had attempted to integrate C sif parser into a web/desktop application by several methods:
 - children process to output JSON
 - node addon to process data
@@ -277,7 +279,43 @@ Here, I had attempted to integrate C sif parser into a web/desktop application b
     - binary Arraybuffer to TypedArray (this type conversion operation is resource-intensive)
     - binary Arraybuffer shared to JS
 
-Compiling the c code to a node addon will enable JS applications call c sif parsing with intrinsic C performance
+The last approach will be memory efficient and reduce resource expenses in JS. 
+
+**Memeory Mapping**
+
+For example, a sif of 2500 frames, whose image sensor size is of 1 x 1240, will have 2500 x 1240 = 2560,000 data point. A float is assigned to recorde light intensity as an integer of 16 bit (0~65535) here in sif format though it is ~~stupid~~ not efficient in memory arrangement. 
+
+
+In `binding.cc`
+```c++
+    // crate binary data uinsg Float32Array
+    size_t buffer_size = total_data_points * sizeof(float); //every data point occupies a float
+    Napi::ArrayBuffer array_buffer = Napi::ArrayBuffer::New(env, buffer_size); //initialize arraybuffer of a continuous memmory of buffer_size in size in JS with Napi
+    float* buffer_data = static_cast<float*>(array_buffer.Data()); // claim a pointer pointing towards the initial position of array_buffer (array_buffer.Data() return void* so it needs static_cast to float pointer)
+
+    // direct copy
+    memcpy(buffer_data, sif_file.frame_data, buffer_size);
+
+    // create Float32Array
+    Napi::TypedArray binary_data = Napi::TypedArrayOf<float>::New(env, 
+        total_data_points, array_buffer, 0, napi_float32_array);
+
+...
+```
+```text
+ArrayBuffer (10,240,000 bytes = 2,560,000 × 4)
+┌──────────────────────────────────────────────────────────────────────┐
+│ bytes 0-3  │ bytes 4-7  │ bytes 8-11 │ ... │ bytes 10239996-10239999 │
+│ float[0]   │ float[1]   │ float[2]   │ ... │ float[2559999]          │
+└──────────────────────────────────────────────────────────────────────┘
+    ↑              ↑              ↑                   ↑
+Float32Array view (2,560,000 elements)
+┌──────────────┬──────────────┬──────────────┬───┬─────────────────────┐
+│  element[0]  │  element[1]  │  element[2]  │...│   element[2559999]  │
+└──────────────┴──────────────┴──────────────┴───┴─────────────────────┘
+
+```
+so this can let JS process the spectrum data from the memory read/parsed by C.
 
 #### Compile with N-API
 
