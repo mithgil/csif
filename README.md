@@ -270,6 +270,13 @@ if (calibration) {
 
 ### Javascript Integration by Node Addon
 
+Here, I had attempted to integrate C sif parser into a web/desktop application by several methods:
+- children process to output JSON
+- node addon to process data
+    - binary to output JSON (let `sifParser.js` to parse JSON again)
+    - binary to TypedArray (this type conversion operation is resource-intensive)
+    - binary shared to JS
+
 Compiling the c code to a node addon will enable JS applications call c sif parsing with intrinsic C performance
 
 #### Compile with N-API

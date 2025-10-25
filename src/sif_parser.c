@@ -1115,7 +1115,7 @@ static void swap_float_array_endian(float *data, int count) {
     }
 }
 
-// main data loading 
+// main frame-data loading 
 int sif_load_all_frames(SifFile *sif_file, int enable_byte_swap) {
     if (!sif_file || !sif_file->file_ptr || sif_file->frame_count == 0) {
         return -1;
@@ -1175,10 +1175,10 @@ int sif_load_all_frames(SifFile *sif_file, int enable_byte_swap) {
                        raw_bytes[j*4+2], raw_bytes[j*4+3], frame_start[j]);
             }
             
-            // validify values
+            // validify values, which dependes on CCD model type
             int valid_count = 0;
             for (int j = 0; j < frame_size; j++) {
-                // this value based upon CCD camera
+                // note: this value based upon CCD camera
                 if (frame_start[j] > 600.0f) {
                     valid_count++;
                     if (valid_count <= 3) {
