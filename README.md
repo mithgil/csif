@@ -273,9 +273,9 @@ if (calibration) {
 Here, I had attempted to integrate C sif parser into a web/desktop application by several methods:
 - children process to output JSON
 - node addon to process data
-    - binary to output JSON (let `sifParser.js` to parse JSON again)
-    - binary to TypedArray (this type conversion operation is resource-intensive)
-    - binary shared to JS
+    - binary Arraybuffer to output JSON (let `sifParser.js` to parse JSON again)
+    - binary Arraybuffer to TypedArray (this type conversion operation is resource-intensive)
+    - binary Arraybuffer shared to JS
 
 Compiling the c code to a node addon will enable JS applications call c sif parsing with intrinsic C performance
 
